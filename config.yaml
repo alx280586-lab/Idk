@@ -1,0 +1,14 @@
+allowed_sources:
+  - "https://create.roblox.com/docs/"
+  - "https://devforum.roblox.com/"
+  - "https://luau-lang.org/"
+  - "https://api.roblox.com/"
+style:
+  default_random_seed: 1337
+  prefer_random_new: false
+  explanation_depth: medium
+training:
+  examples_dir: "data/examples"
+  tests_dir: "data/tests"
+  persona_file: "persona.yaml"
+  heuristics_file: "heuristics.yaml"
