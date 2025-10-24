@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Iterable
 
 from .config import EidolonConfig
 from .state import PersonalityState
-from .cortex import Cortex, CortexResult
-from .memory import MemoryWeb
+from .cortex import Cortex, CortexResult, AgentResponse
+from .memory import MemoryWeb, MemoryEntry
 from .forge import Forge
 from .firewall import FirewallRing
 from .reflection import ReflectionEngine
 from .training import TrainingGround, TrainingRecord
 from .web_growth import WebGrowthSystem, WebFinding
+from .dataset import load_seed_training_corpus
 
 
 @dataclass
@@ -65,6 +66,7 @@ class Kernel:
         self._training = training
         self._web_growth = web_growth
         self._autonomy_initialized = False
+        self._seed_initialized = False
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -90,26 +92,45 @@ class Kernel:
         self._firewall.inspect("talk", message)
         analysis = self._cortex.process(message)
         tone = self._describe_tone()
-        insights = [response.insight for response in analysis.responses]
-        if insights:
-            insight_blurb = " ".join(insights[:2])
-        else:
-            insight_blurb = "I'm still forming a hypothesis and would value more detail."
-        recalled = self._memory.latest_by_provenance("training", limit=3)
-        if recalled:
-            lessons = ", ".join(entry.content for entry in recalled)
-            lesson_text = f"I'm grounding this in what you've taught me: {lessons}."
-        else:
-            lesson_text = "Share guidance with 'train <topic>: <details>' and I'll adapt immediately."
+        reasoning_summary = analysis.reasoning_summary
+        strategic_notes = self._summarize_insights(analysis.responses)
+        evidence_block = self._format_evidence(analysis.related_memories)
         reply = (
             f"{tone}\n"
-            f"You said: {message}\n"
-            f"Here's how I'm thinking: {insight_blurb}\n"
-            f"{lesson_text}"
+            f"Prompt understood as: {message}\n"
+            f"Reasoning summary: {reasoning_summary}\n"
+            f"Strategic notes: {strategic_notes}\n"
+            f"Evidence I'm weighing:\n{evidence_block}"
         )
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.65, "collaboration")
         return ChatResult(message, reply, analysis)
+
+    def _summarize_insights(self, responses: Iterable[AgentResponse]) -> str:
+        highlights = []
+        for response in responses:
+            if response.agent in {"logic", "curiosity", "reasoning"}:
+                highlights.append(response.insight)
+            if len(highlights) >= 3:
+                break
+        if not highlights:
+            return "Still collecting evidence before committing to a direction."
+        return " | ".join(highlights)
+
+    def _format_evidence(self, memories: Iterable[MemoryEntry]) -> str:
+        evidence_lines = []
+        for entry in list(memories)[:4]:
+            domain, _, aspect = entry.topic.partition("::")
+            if "so that the initiative " in entry.content:
+                benefit = entry.content.split("so that the initiative ", 1)[1].rstrip(".")
+            else:
+                benefit = "produces consistent improvements"
+            evidence_lines.append(
+                f"- {domain.title()} emphasises {aspect} to ensure it {benefit}."
+            )
+        if not evidence_lines:
+            evidence_lines.append("- No matching memories yet; please share more training input when ready.")
+        return "\n".join(evidence_lines)
 
     def enforce_security(self, command: str, payload: str) -> None:
         self._firewall.inspect(command, payload)
@@ -119,6 +140,12 @@ class Kernel:
 
         if self._autonomy_initialized:
             return
+
+        if not self._seed_initialized:
+            seeded = load_seed_training_corpus(self._memory)
+            if seeded:
+                self._personality.adjust(confidence=0.08, curiosity=0.05, integrity=0.03)
+            self._seed_initialized = True
         settings = self._config.web
         if not settings.autostart:
             self._autonomy_initialized = True
