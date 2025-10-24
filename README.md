@@ -35,21 +35,57 @@ requirements.txt
 
 ## Setup
 
-1. **Install dependencies**
+The checklist below assumes you have a recent version of Python (3.10 or newer) installed. If you are new to Python, follow each step in order and don’t move on until the previous command succeeds.
+
+1. **Download the project**
+
+   ```bash
+   git clone <this-repo-url>
+   cd Idk  # or the folder name you chose when cloning
+   ```
+
+2. **Create and activate a virtual environment**
+
+   A virtual environment keeps the project’s dependencies separate from the rest of your system.
 
    ```bash
    python -m venv .venv
-   source .venv/bin/activate  # On Windows use `.venv\\Scripts\\activate`
+   # macOS / Linux
+   source .venv/bin/activate
+   # Windows PowerShell
+   # .venv\Scripts\Activate.ps1
+   ```
+
+   After activation your terminal prompt should show `(.venv)` at the beginning.
+
+3. **Install Python dependencies**
+
+   ```bash
+   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-2. **(Optional) Update allowed documentation sources**
+   If a package fails to install, read the error message and install any missing system tools (for example, `pip install wheel` on Windows before re-running the command).
 
-   Edit `config.yaml` and modify the `allowed_sources` list. Any URL prefix you add here becomes available to the retrieval module.
+4. **Review configuration files**
 
-3. **Provide training examples**
+   - `config.yaml` – change `allowed_sources` to the documentation sites you trust. The retrieval module will refuse to fetch from domains not listed here.
+   - `persona.yaml` – adjust the `name`, tone keywords, and phrases to shape how the chatbot speaks.
+   - `heuristics.yaml` – optional; stores style preferences learned from training. Delete it to reset the lab’s memory.
 
-   Drop Luau/Luau scripts into `data/examples/` and test descriptors (`.json`) into `data/tests/`. Run the training command (see below) to ingest them.
+5. **Provide initial examples (optional but recommended)**
+
+   Place Luau scripts you like in `data/examples/` and describe tests in JSON files inside `data/tests/`. The default `spawn.lua`/`spawn_test.json` pair demonstrates the format.
+
+6. **Run the training pass**
+
+   Training ingests the examples/tests and updates `heuristics.yaml`.
+
+   ```bash
+   python -m luau_lab.training
+   ```
+
+   You should see log messages confirming which examples were scanned. Rerun this command whenever you add or modify examples.
 
 ## Running the chatbot (CLI)
 
@@ -57,6 +93,7 @@ requirements.txt
 python main.py
 ```
 
+- The CLI automatically loads the persona, heuristics, and allowed documentation sources you configured during setup.
 - Type your request, e.g., `Make a script that picks a random spawn tagged NPC and explain it.`
 - Use the command `train` to re-run the training suite and update heuristics from the latest examples.
 - Exit with `quit` or `exit`.
@@ -89,6 +126,8 @@ The suite performs three passes:
 
 Updated heuristics are persisted to `heuristics.yaml`.
 
+If you want the lab to forget what it has learned, delete `heuristics.yaml` and rerun the command above.
+
 ## Extending the lab
 
 - Add new templates in `luau_lab/synthesizer.py` to cover more Roblox systems.
@@ -98,6 +137,8 @@ Updated heuristics are persisted to `heuristics.yaml`.
 ## Hosting considerations
 
 The web server provided here is a lightweight Flask app intended for local or LAN access. If you want to host it publicly, place it behind HTTPS (e.g., via nginx) and protect the endpoints with authentication to avoid misuse.
+
+For quick remote demos, you can run the server locally and tunnel it with a tool such as `ngrok` or `cloudflared tunnel`—just be mindful that this exposes your workstation to the internet, so enable authentication first.
 
 ## License
 
