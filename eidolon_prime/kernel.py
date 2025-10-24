@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Dict, Any, Iterable, Optional
+from typing import Dict, Any, Iterable, Optional, List
 
 from .config import EidolonConfig
 from .state import PersonalityState
@@ -14,6 +14,8 @@ from .firewall import FirewallRing
 from .reflection import ReflectionEngine
 from .training import TrainingGround, TrainingRecord
 from .web_growth import WebGrowthSystem, WebFinding, AutoTrainingReport
+from .conversation import ConversationDatastore, ConversationPattern
+from .language import LanguageEngine, SemanticFrame
 from .dataset import load_seed_training_corpus
 
 
@@ -73,6 +75,8 @@ class Kernel:
         reflection: ReflectionEngine,
         training: TrainingGround,
         web_growth: WebGrowthSystem,
+        conversation: ConversationDatastore,
+        language: LanguageEngine,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -83,6 +87,8 @@ class Kernel:
         self._reflection = reflection
         self._training = training
         self._web_growth = web_growth
+        self._conversation = conversation
+        self._language = language
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -108,30 +114,44 @@ class Kernel:
         self._firewall.inspect("train", payload)
         record = self._training.ingest(payload)
         self._personality.adjust(confidence=0.01, curiosity=0.02)
+        lowered_topic = record.topic.lower()
+        if any(keyword in lowered_topic for keyword in ("conversation", "dialog", "tone")):
+            self._conversation.ingest_highlights(
+                ((record.topic, record.content, record.content),)
+            )
         return record
 
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
         analysis = self._cortex.process(message)
-        tone = self._describe_tone()
-        intent = self._interpret_intent(message, analysis.related_memories)
-        strategic_notes = self._summarize_insights(analysis.responses)
-        reasoning_block = self._compose_reasoning_block(analysis)
-        evidence_block = self._format_evidence(analysis.related_memories)
-        organic_summary = self._compose_reply_summary(
-            message,
-            analysis.responses,
-            strategic_notes,
-            analysis.reasoning_summary,
+        intent, affect = self._infer_intent_and_affect(message)
+        pattern = self._conversation.select_pattern(intent, affect)
+        frame = self._build_semantic_frame(message, intent, affect, analysis, pattern)
+        reply_body, lexical = self._language.compose_reply(
+            frame,
+            pattern.structure,
+            pattern.register,
+            self._personality.describe(),
         )
-        reply = (
-            f"{tone} {intent}\n\n"
-            f"Here's the reasoning trail I'm following:\n{reasoning_block}\n\n"
-            f"Grounding evidence:\n{evidence_block}\n\n"
-            f"Putting it all together: {organic_summary}"
+        tone_header = self._describe_tone(pattern.tone)
+        reply = f"{tone_header}\n\n{reply_body}"
+        success_score = self._estimate_success(analysis, lexical, len(frame.evidence))
+        self._conversation.register_turn(
+            pattern.pattern_id,
+            intent=intent,
+            user_affect=affect,
+            tone=pattern.tone,
+            structure=pattern.structure,
+            lexical_variety=lexical,
+            success=success_score,
+            reasoning_trace=analysis.reasoning_summary,
         )
+        if success_score > 0.7:
+            self._personality.adjust(empathy=0.02, confidence=0.01)
+        else:
+            self._personality.adjust(empathy=0.005)
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
-        self._memory.record("conversation", f"eidolon::{reply}", 0.65, "collaboration")
+        self._memory.record("conversation", f"eidolon::{reply}", 0.68, "collaboration")
         return ChatResult(message, reply, analysis)
 
     def autonomous_train(
@@ -147,6 +167,14 @@ class Kernel:
             self._personality.adjust(curiosity=0.01)
         summary_topic = "autonomy::report"
         self._memory.record(summary_topic, report.render(), 0.6, "autonomous_web")
+        self._conversation.ingest_highlights(
+            (
+                highlight.topic,
+                highlight.summary,
+                highlight.insight,
+            )
+            for highlight in report.highlights
+        )
         return report
 
     def start_autonomous_training(
@@ -217,103 +245,156 @@ class Kernel:
         thread = self._continuous_training_thread
         return bool(thread and thread.is_alive())
 
-    def _summarize_insights(self, responses: Iterable[AgentResponse]) -> str:
-        highlights = []
-        for response in responses:
-            if response.agent in {"logic", "curiosity", "reasoning"}:
-                highlights.append(response.insight)
-            if len(highlights) >= 3:
-                break
-        if not highlights:
-            return "Still collecting evidence before committing to a direction."
-        return " | ".join(highlights)
+    def _infer_intent_and_affect(self, message: str) -> tuple[str, str]:
+        lowered = message.lower().strip()
+        intent = "explain"
+        if "?" in message or any(
+            lowered.startswith(prefix)
+            for prefix in ("how", "what", "why", "where", "when")
+        ):
+            intent = "question"
+        elif any(keyword in lowered for keyword in ("plan", "design", "build", "fix")):
+            intent = "problem_solving"
+        elif any(keyword in lowered for keyword in ("motivate", "inspire", "story")):
+            intent = "motivate"
+        affect = self._compute_user_affect(lowered)
+        return intent, affect
 
-    def _format_evidence(self, memories: Iterable[MemoryEntry]) -> str:
-        evidence_lines = []
-        for entry in list(memories)[:4]:
-            domain, _, aspect = entry.topic.partition("::")
-            if "so that the initiative " in entry.content:
-                benefit = entry.content.split("so that the initiative ", 1)[1].rstrip(".")
-            else:
-                benefit = "produces consistent improvements"
-            evidence_lines.append(
-                f"- {domain.title()} → {aspect or 'general focus'}: this lesson shows it {benefit}."
-            )
-        if not evidence_lines:
-            evidence_lines.append("- No matching memories yet; please share more training input when ready.")
-        return "\n".join(evidence_lines)
+    def _compute_user_affect(self, lowered: str) -> str:
+        negative_markers = {"stuck", "confused", "worried", "frustrated", "angry"}
+        positive_markers = {"excited", "happy", "thanks", "love", "great"}
+        if any(marker in lowered for marker in negative_markers):
+            return "stressed"
+        if any(marker in lowered for marker in positive_markers):
+            return "positive"
+        return "neutral"
 
-    def _compose_reasoning_block(self, analysis: CortexResult) -> str:
-        lines = []
-        for response in analysis.responses:
-            lines.append(f"- {response.agent.title()}: {response.insight}")
-        if analysis.experiments:
-            experiment_phrases = [
-                f"{result.description} ({'success' if result.success else 'learning opportunity'})"
-                for result in analysis.experiments[:3]
-            ]
-            lines.append(f"- Experiments: {', '.join(experiment_phrases)}")
-        else:
-            lines.append("- Experiments: none needed; relied on validated precedents.")
-        lines.append(f"- Reflection: {analysis.reflection.rationale}")
-        lines.append(f"- Synthesis: {analysis.reasoning_summary}")
-        return "\n".join(lines)
-
-    def _interpret_intent(
-        self, message: str, memories: Iterable[MemoryEntry]
-    ) -> str:
-        cleaned_tokens = []
-        for token in message.split():
-            stripped = token.strip(".,!?;:").lower()
-            if len(stripped) >= 4 and stripped not in cleaned_tokens:
-                cleaned_tokens.append(stripped)
-            if len(cleaned_tokens) >= 4:
-                break
-        memory_list = list(memories)
-        if memory_list:
-            focus_topic = memory_list[0].topic.replace("::", " → ")
-        else:
-            focus_topic = "the idea you raised"
-        if cleaned_tokens:
-            keywords = ", ".join(cleaned_tokens)
-            return f"I'm interpreting your request through the lens of {keywords} with focus on {focus_topic}."
-        return f"I'm interpreting your request with focus on {focus_topic}."
-
-    def _compose_reply_summary(
+    def _build_semantic_frame(
         self,
         message: str,
-        responses: Iterable[AgentResponse],
-        strategic_notes: str,
-        reasoning_summary: str,
+        intent: str,
+        affect: str,
+        analysis: CortexResult,
+        pattern: ConversationPattern,
+    ) -> SemanticFrame:
+        topic = self._derive_topic(message, analysis.related_memories)
+        key_points = self._extract_key_points(analysis.responses, analysis.reasoning_summary)
+        evidence = self._extract_evidence(analysis.related_memories)
+        actions = self._extract_actions(analysis)
+        emotional_tone = self._derive_emotional_tone(pattern.tone, affect)
+        call_to_action = self._craft_call_to_action(analysis, actions)
+        outcome = analysis.reflection.rationale
+        return SemanticFrame(
+            intent=intent,
+            topic=topic,
+            user_message=message,
+            key_points=key_points,
+            evidence=evidence,
+            actions=actions,
+            emotional_tone=emotional_tone,
+            call_to_action=call_to_action,
+            outcome=outcome,
+        )
+
+    def _derive_topic(self, message: str, memories: Iterable[MemoryEntry]) -> str:
+        memory_list = list(memories)
+        if memory_list:
+            return memory_list[0].topic.replace("::", " → ")
+        tokens = [token.strip(".,!?;:") for token in message.split() if len(token) > 3]
+        return " ".join(tokens[:4]) if tokens else message[:32]
+
+    def _extract_key_points(
+        self, responses: Iterable[AgentResponse], reasoning_summary: str
+    ) -> List[str]:
+        insights = []
+        for response in responses:
+            humanized = self._humanize_insight(response)
+            if humanized not in insights:
+                insights.append(humanized)
+            if len(insights) >= 4:
+                break
+        if not insights and reasoning_summary:
+            insights.append(reasoning_summary)
+        return insights
+
+    def _extract_actions(self, analysis: CortexResult) -> List[str]:
+        actions: List[str] = []
+        for result in analysis.experiments:
+            if result.success:
+                summary = self._summarize_experiment(result.description)
+                actions.append(
+                    f"pilot an experiment to {summary} so we validate the approach"
+                )
+        if analysis.reasoning_summary and analysis.reasoning_summary not in actions:
+            actions.append(analysis.reasoning_summary)
+        return actions[:4]
+
+    def _humanize_insight(self, response: AgentResponse) -> str:
+        text = response.insight.strip()
+        if response.agent == "logic" and text.startswith("Mapped your request to"):
+            return text.replace("Mapped your request to", "Your request aligns with", 1)
+        if response.agent == "logic" and text.startswith("Structured the prompt"):
+            return text.replace("Structured the prompt", "I structured the prompt", 1)
+        if response.agent == "curiosity" and text.startswith("Propose"):
+            return text.replace("Propose", "I propose", 1)
+        if response.agent == "ethics" and text.startswith("Checked prompt"):
+            return text.replace("Checked prompt", "Ethics review confirms", 1)
+        if response.agent == "reasoning" and text.startswith("Synthesized"):
+            return text.replace("Synthesized", "I synthesized", 1)
+        return text
+
+    def _summarize_experiment(self, description: str) -> str:
+        text = description.strip()
+        text = text.replace("experiment", "")
+        if text.startswith("Mapped your request to"):
+            return text.replace("Mapped your request to", "confirm the request aligns with", 1).rstrip(".")
+        if text.startswith("I structured the prompt"):
+            return text.replace("I structured the prompt", "stress-test the prompt", 1).rstrip(".")
+        return text.rstrip(".")
+
+    def _extract_evidence(self, memories: Iterable[MemoryEntry]) -> List[str]:
+        evidence_lines: List[str] = []
+        for entry in list(memories)[:4]:
+            snippet = entry.content
+            if len(snippet) > 120:
+                snippet = snippet[:117] + "..."
+            evidence_lines.append(
+                f"{entry.topic} → {snippet} (confidence {entry.confidence:.2f})"
+            )
+        return evidence_lines
+
+    def _derive_emotional_tone(self, desired_tone: str, affect: str) -> str:
+        if affect == "stressed":
+            return "calm and steady"
+        if self._personality.empathy > 0.7:
+            return "deeply supportive"
+        if desired_tone == "encouraging" and self._personality.curiosity > 0.6:
+            return "encouraging and exploratory"
+        if desired_tone == "steady" and self._personality.confidence > 0.6:
+            return "confident and pragmatic"
+        return desired_tone or "balanced"
+
+    def _craft_call_to_action(
+        self, analysis: CortexResult, actions: List[str]
     ) -> str:
-        summary_bits = []
-        reasoning_insight = next(
-            (response.insight for response in responses if response.agent == "reasoning"),
-            None,
+        if actions:
+            return f"Let's act on {actions[0]} next."
+        return (
+            analysis.reasoning_summary
+            or "I'm ready to dig further once you highlight the next angle."
         )
-        logic_insight = next(
-            (response.insight for response in responses if response.agent == "logic"),
-            None,
-        )
-        if reasoning_insight:
-            summary_bits.append(reasoning_insight)
-        if strategic_notes:
-            for piece in strategic_notes.split("|"):
-                trimmed = piece.strip()
-                if trimmed:
-                    summary_bits.append(trimmed)
-        if not summary_bits:
-            summary_bits.append(reasoning_summary)
-        if logic_insight:
-            summary_bits.append(logic_insight)
-        deduped = []
-        for bit in summary_bits:
-            if bit and bit not in deduped:
-                deduped.append(bit)
-        final_summary = " ".join(deduped)
-        if not final_summary.endswith("."):
-            final_summary += "."
-        return final_summary
+
+    def _estimate_success(
+        self, analysis: CortexResult, lexical: float, evidence_count: int
+    ) -> float:
+        base = 0.55 + 0.25 * min(1.0, lexical)
+        if analysis.reflection.accepted:
+            base += 0.08
+        base += min(0.08, evidence_count * 0.02)
+        if analysis.experiments:
+            successful = sum(1 for result in analysis.experiments if result.success)
+            base += min(0.07, successful * 0.02)
+        return max(0.0, min(1.0, base))
 
     def enforce_security(self, command: str, payload: str) -> None:
         self._firewall.inspect(command, payload)
@@ -353,7 +434,13 @@ class Kernel:
             self._personality.adjust(curiosity=0.05, confidence=0.02)
         self._autonomy_initialized = True
 
-    def _describe_tone(self) -> str:
+    def _describe_tone(self, preferred: Optional[str] = None) -> str:
+        if preferred == "encouraging" and self._personality.empathy > 0.5:
+            return "I'll keep an encouraging tone while we explore this together."
+        if preferred == "steady":
+            return "I'll stay steady and pragmatic so we can tackle the moving parts."
+        if preferred == "curious":
+            return "I'll approach this with inquisitive energy to surface new angles."
         if self._personality.empathy > 0.7:
             return "I'm feeling especially supportive."
         if self._personality.curiosity > 0.6:

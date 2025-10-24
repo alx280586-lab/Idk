@@ -34,6 +34,7 @@ class AutoTrainingHighlight:
 
     source: str
     topic: str
+    summary: str
     insight: str
 
 
@@ -57,7 +58,7 @@ class AutoTrainingReport:
         header.append("- Highlights:")
         for highlight in self.highlights:
             header.append(
-                f"  • {highlight.topic} ← {highlight.source}: {highlight.insight}"
+                f"  • {highlight.topic} ← {highlight.source}: {highlight.summary} | {highlight.insight}"
             )
         return "\n".join(header)
 
@@ -334,6 +335,36 @@ AUTONOMOUS_SOURCES: List[AutonomousSource] = [
         tags=("encyclopedia", "roblox", "platform"),
     ),
     AutonomousSource(
+        source="https://www.plainlanguage.gov/guidelines/",
+        topic="communication::plain_language",
+        summary="PlainLanguage.gov guidance on clarity, structure, and active voice for public communication.",
+        insight=(
+            "Plain language keeps sentences active, front-loads the key point, and uses lists"
+            " when readers need to scan for actions."
+        ),
+        tags=("communication", "tone", "clarity"),
+    ),
+    AutonomousSource(
+        source="https://writingcenter.unc.edu/tips-and-tools/communication/",
+        topic="communication::dialogue_principles",
+        summary="UNC Writing Center primer on adapting tone to audience expectations and goals.",
+        insight=(
+            "Effective dialogue aligns evidence with audience expectations and signals"
+            " openness to follow-up questions."
+        ),
+        tags=("communication", "dialogue", "tone"),
+    ),
+    AutonomousSource(
+        source="https://hbr.org/2013/11/the-art-of-asking-questions",
+        topic="communication::questioning",
+        summary="Harvard Business Review article on structuring probing, open-ended questions.",
+        insight=(
+            "Great questions sequence clarification, expansion, and reflection so conversations"
+            " stay collaborative instead of interrogative."
+        ),
+        tags=("communication", "questions", "conversation"),
+    ),
+    AutonomousSource(
         source="https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html",
         topic="software_practice::aws_well_architected",
         summary="AWS Well-Architected Framework principles.",
@@ -462,6 +493,7 @@ class WebGrowthSystem:
                 AutoTrainingHighlight(
                     source=source.source,
                     topic=source.topic,
+                    summary=source.summary,
                     insight=source.insight,
                 )
             )

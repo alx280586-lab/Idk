@@ -1,0 +1,469 @@
+"""Grammar datastore and language realization utilities."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Dict, List, Sequence, Tuple
+
+
+@dataclass
+class SemanticFrame:
+    """Meaning representation produced before surface realization."""
+
+    intent: str
+    topic: str
+    user_message: str
+    key_points: List[str]
+    evidence: List[str]
+    actions: List[str]
+    emotional_tone: str
+    call_to_action: str
+    outcome: str
+
+    def condensed_topic(self) -> str:
+        return self.topic or "the subject you raised"
+
+
+@dataclass
+class GrammarTemplate:
+    """Reusable rhetorical structure used to craft sentences."""
+
+    template_id: str
+    rhetorical_function: str
+    slots: Dict[str, str]
+    register_tags: Sequence[str]
+    variation_ops: Sequence[str] = field(default_factory=tuple)
+
+
+@dataclass
+class RegisterPack:
+    """Defines vocabulary and tone for a writing register."""
+
+    name: str
+    openers: Sequence[str]
+    connectors: Sequence[str]
+    closings: Sequence[str]
+    hedges: Sequence[str]
+
+    def pick(self, items: Sequence[str], variant: int) -> str:
+        if not items:
+            return ""
+        index = variant % len(items)
+        return items[index]
+
+    def opener(self, variant: int) -> str:
+        return self.pick(self.openers, variant)
+
+    def connector(self, variant: int) -> str:
+        return self.pick(self.connectors, variant)
+
+    def closing(self, variant: int) -> str:
+        return self.pick(self.closings, variant)
+
+    def hedge(self, variant: int) -> str:
+        return self.pick(self.hedges, variant)
+
+
+_DEFAULT_TEMPLATES: Tuple[GrammarTemplate, ...] = (
+    GrammarTemplate(
+        template_id="explain_sequence",
+        rhetorical_function="explain",
+        slots={
+            "introduction": "{opener} {topic_sentence} {tone_clause}",
+            "analysis": "{connector} {analysis_sentence}",
+            "evidence": "{connector} {evidence_sentence}",
+            "action": "{connector} {action_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("technical_conversational", "balanced"),
+        variation_ops=("shuffle_support", "cause_effect"),
+    ),
+    GrammarTemplate(
+        template_id="diagnose_strategy",
+        rhetorical_function="problem_solving",
+        slots={
+            "introduction": "{opener} {topic_sentence} {tone_clause}",
+            "analysis": "{connector} {diagnosis_sentence}",
+            "action": "{connector} {strategy_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("analytical",),
+        variation_ops=("highlight_decision",),
+    ),
+    GrammarTemplate(
+        template_id="clarify_answer_invite",
+        rhetorical_function="question",
+        slots={
+            "introduction": "{opener} {clarify_sentence}",
+            "analysis": "{connector} {answer_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("technical_conversational", "balanced"),
+        variation_ops=("invite_followup",),
+    ),
+    GrammarTemplate(
+        template_id="story_lesson",
+        rhetorical_function="motivate",
+        slots={
+            "introduction": "{opener} {story_hook}",
+            "analysis": "{connector} {lesson_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("narrative", "balanced"),
+        variation_ops=("amplify_emotion",),
+    ),
+    GrammarTemplate(
+        template_id="acknowledge_analyse",
+        rhetorical_function="universal",
+        slots={
+            "introduction": "{opener} {ack_sentence}",
+            "analysis": "{connector} {analysis_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("balanced",),
+        variation_ops=("cause_effect",),
+    ),
+)
+
+
+_DEFAULT_REGISTERS: Tuple[RegisterPack, ...] = (
+    RegisterPack(
+        name="technical_conversational",
+        openers=(
+            "Thanks for raising this.",
+            "Great question to explore.",
+            "Let's unpack this together.",
+        ),
+        connectors=("From training I learned that", "Drawing on recent lessons,", "In practice,"),
+        closings=(
+            "Happy to adapt the plan if you want to go deeper.",
+            "Let me know if you want a follow-up drill.",
+            "I'm ready to iterate with you on this.",
+        ),
+        hedges=("typically", "usually", "often"),
+    ),
+    RegisterPack(
+        name="analytical",
+        openers=("Here is what the diagnostics show.", "Let's map the moving parts."),
+        connectors=("First,", "Meanwhile,", "To steer this,"),
+        closings=(
+            "We can review metrics together after the next experiment.",
+            "I'll keep monitoring the signals we highlighted.",
+        ),
+        hedges=("deliberately", "precisely"),
+    ),
+    RegisterPack(
+        name="narrative",
+        openers=("Imagine the path a seasoned creator took.", "Picture a team in the same spot."),
+        connectors=("In their case,", "What they discovered was", "It turned when"),
+        closings=(
+            "Let's channel that momentum in your next move.",
+            "You can build a similar arc step by step.",
+        ),
+        hedges=("honestly", "notably"),
+    ),
+    RegisterPack(
+        name="balanced",
+        openers=("I hear what you're aiming for.", "Let's stay grounded."),
+        connectors=("Here's how it lines up", "From a systems view", "Consider that"),
+        closings=(
+            "I'm beside you as we keep refining this.",
+            "Share any pushback and we'll re-evaluate together.",
+        ),
+        hedges=("carefully", "thoughtfully"),
+    ),
+)
+
+
+class GrammarDatastore:
+    """Provides templates and register packs for the language engine."""
+
+    def __init__(self) -> None:
+        self._templates: Dict[str, GrammarTemplate] = {
+            template.template_id: template for template in _DEFAULT_TEMPLATES
+        }
+        self._registers: Dict[str, RegisterPack] = {
+            register.name: register for register in _DEFAULT_REGISTERS
+        }
+
+    def template_for_structure(self, structure: str) -> GrammarTemplate:
+        lookup = {
+            "teach→example→recap": "explain_sequence",
+            "diagnose→strategy→next-step": "diagnose_strategy",
+            "clarify→answer→invite": "clarify_answer_invite",
+            "story→insight→encourage": "story_lesson",
+            "story→lesson→next-step": "story_lesson",
+            "acknowledge→analysis→summary": "acknowledge_analyse",
+            "acknowledge→contrast→resolve": "acknowledge_analyse",
+            "teach→drill→recap": "explain_sequence",
+        }
+        template_id = lookup.get(structure, "acknowledge_analyse")
+        return self._templates[template_id]
+
+    def register_pack(self, name: str) -> RegisterPack:
+        return self._registers.get(name, self._registers["balanced"])
+
+    def add_template(self, template: GrammarTemplate) -> None:
+        self._templates[template.template_id] = template
+
+    def add_register(self, register: RegisterPack) -> None:
+        self._registers[register.name] = register
+
+    def realize(
+        self,
+        frame: SemanticFrame,
+        template: GrammarTemplate,
+        register: RegisterPack,
+        variant: int = 0,
+    ) -> Dict[str, str]:
+        """Return populated slot text for a given template and register."""
+
+        context = self._build_context(frame, register, variant)
+        sentences: Dict[str, str] = {}
+        for slot, pattern in template.slots.items():
+            sentences[slot] = pattern.format(**context)
+        return sentences
+
+    def _build_context(
+        self, frame: SemanticFrame, register: RegisterPack, variant: int
+    ) -> Dict[str, str]:
+        opener = register.opener(variant)
+        connector = register.connector(variant)
+        closing = register.closing(variant)
+        hedge = register.hedge(variant)
+        topic_sentence = (
+            f"We're focusing on {frame.condensed_topic()} based on your message."
+        )
+        analysis_sentence = self._compose_analysis_sentence(frame, hedge)
+        evidence_sentence = self._compose_evidence_sentence(frame, hedge)
+        action_sentence = self._compose_action_sentence(frame)
+        diagnosis_sentence = self._compose_diagnosis_sentence(frame, hedge)
+        strategy_sentence = self._compose_strategy_sentence(frame)
+        clarify_sentence = self._compose_clarify_sentence(frame, hedge)
+        answer_sentence = self._compose_answer_sentence(frame)
+        story_hook = self._compose_story_hook(frame)
+        lesson_sentence = self._compose_lesson_sentence(frame)
+        closing_sentence = self._compose_closing_sentence(frame, closing)
+        tone_clause = f"I'm keeping the tone {frame.emotional_tone}."
+        return {
+            "opener": opener,
+            "connector": connector,
+            "closing_sentence": closing_sentence,
+            "topic_sentence": topic_sentence,
+            "tone_clause": tone_clause,
+            "analysis_sentence": analysis_sentence,
+            "evidence_sentence": evidence_sentence,
+            "action_sentence": action_sentence,
+            "diagnosis_sentence": diagnosis_sentence,
+            "strategy_sentence": strategy_sentence,
+            "clarify_sentence": clarify_sentence,
+            "answer_sentence": answer_sentence,
+            "story_hook": story_hook,
+            "lesson_sentence": lesson_sentence,
+        }
+
+    def _compose_analysis_sentence(self, frame: SemanticFrame, hedge: str) -> str:
+        if frame.key_points:
+            primary = self._tidy(frame.key_points[0])
+            return f"{hedge.title()} speaking, the key signal is that {primary}."
+        return "I'm still distilling the right signal."
+
+    def _compose_evidence_sentence(self, frame: SemanticFrame, hedge: str) -> str:
+        if frame.evidence:
+            evidence = self._tidy(frame.evidence[0])
+            return f"{hedge.title()} I rely on training evidence such as {evidence}."
+        return "I'm ready to gather more evidence as needed."
+
+    def _compose_action_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            return f"Next, I recommend {self._tidy(frame.actions[0])}."
+        return "We can collect more data before committing to a move."
+
+    def _compose_diagnosis_sentence(
+        self, frame: SemanticFrame, hedge: str
+    ) -> str:
+        if len(frame.key_points) > 1:
+            secondary = self._tidy(frame.key_points[1])
+            return f"{hedge.title()} the constraints revolve around {secondary}."
+        return "The main constraint is still emerging."
+
+    def _compose_strategy_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            strategy = self._tidy(frame.actions[0])
+            return f"A resilient strategy is to {strategy}."
+        return "We can design experiments before picking a strategy."
+
+    def _compose_clarify_sentence(self, frame: SemanticFrame, hedge: str) -> str:
+        return (
+            f"{hedge.title()} I interpret your intent as exploring {frame.condensed_topic()}"
+            f" so I checked which training memories line up."
+        )
+
+    def _compose_answer_sentence(self, frame: SemanticFrame) -> str:
+        if frame.key_points:
+            insight = self._tidy(frame.key_points[0])
+            return f"The guidance points toward {insight}."
+        return "My training suggests we should gather a bit more detail."
+
+    def _compose_story_hook(self, frame: SemanticFrame) -> str:
+        if frame.key_points:
+            return f"Someone tackled {frame.condensed_topic()} and noticed {self._tidy(frame.key_points[0])}."
+        return f"There's a familiar arc when working with {frame.condensed_topic()}."
+
+    def _compose_lesson_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            return f"Their breakthrough came from {self._tidy(frame.actions[0])}."
+        return "Progress arrived once they kept iterating on small experiments."
+
+    def _compose_closing_sentence(
+        self, frame: SemanticFrame, closing: str
+    ) -> str:
+        if frame.call_to_action:
+            return f"{frame.call_to_action} {closing}"
+        return closing
+
+    def _tidy(self, text: str) -> str:
+        cleaned = text.strip()
+        while cleaned and cleaned[-1] in ".!?":
+            cleaned = cleaned[:-1]
+        return cleaned
+
+
+class LanguageEngine:
+    """Transforms semantic frames into conversational replies."""
+
+    def __init__(self, datastore: GrammarDatastore) -> None:
+        self._datastore = datastore
+
+    def compose_reply(
+        self,
+        frame: SemanticFrame,
+        structure: str,
+        register_name: str,
+        personality_snapshot: str,
+    ) -> Tuple[str, float]:
+        template = self._datastore.template_for_structure(structure)
+        register = self._datastore.register_pack(register_name)
+        candidates: List[Tuple[float, str]] = []
+        for variant in range(3):
+            slots = self._datastore.realize(frame, template, register, variant)
+            slots = self._apply_variations(slots, template.variation_ops, variant)
+            paragraphs = self._structure_paragraphs(slots, structure, personality_snapshot)
+            candidate = "\n\n".join(paragraphs)
+            score = self._score_candidate(candidate)
+            candidates.append((score, candidate))
+        best_score, best_text = max(candidates, key=lambda item: item[0])
+        lexical = self._lexical_variety(best_text)
+        return best_text, lexical
+
+    def _apply_variations(
+        self, slots: Dict[str, str], operations: Sequence[str], variant: int
+    ) -> Dict[str, str]:
+        updated = dict(slots)
+        for operation in operations:
+            if operation == "shuffle_support":
+                updated = self._op_shuffle_support(updated, variant)
+            elif operation == "cause_effect":
+                updated = self._op_cause_effect(updated)
+            elif operation == "highlight_decision":
+                updated = self._op_highlight_decision(updated)
+            elif operation == "invite_followup":
+                updated = self._op_invite_followup(updated)
+            elif operation == "amplify_emotion":
+                updated = self._op_amplify_emotion(updated)
+        return updated
+
+    def _structure_paragraphs(
+        self, slots: Dict[str, str], structure: str, personality_snapshot: str
+    ) -> List[str]:
+        structure_parts = structure.split("→")
+        paragraphs: List[str] = []
+        intro = [slots.get("introduction", ""), f"Personality snapshot: {personality_snapshot}."]
+        paragraphs.append(" ".join(part for part in intro if part))
+        body_sentences: List[str] = []
+        for segment in structure_parts:
+            key = self._segment_to_slot(segment)
+            if key and slots.get(key):
+                if key in {"closing", "introduction"}:
+                    continue
+                body_sentences.append(slots[key])
+        if slots.get("evidence") and slots["evidence"] not in body_sentences:
+            body_sentences.append(slots["evidence"])
+        if body_sentences:
+            paragraphs.append(" ".join(body_sentences))
+        if slots.get("closing"):
+            paragraphs.append(slots["closing"])
+        return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
+
+    def _segment_to_slot(self, segment: str) -> str:
+        mapping = {
+            "teach": "analysis",
+            "example": "evidence",
+            "recap": "closing",
+            "diagnose": "analysis",
+            "strategy": "action",
+            "next-step": "closing",
+            "clarify": "introduction",
+            "answer": "analysis",
+            "invite": "closing",
+            "story": "analysis",
+            "insight": "analysis",
+            "encourage": "closing",
+            "acknowledge": "introduction",
+            "analysis": "analysis",
+            "summary": "closing",
+            "lesson": "analysis",
+        }
+        return mapping.get(segment, "analysis")
+
+    def _op_shuffle_support(self, slots: Dict[str, str], variant: int) -> Dict[str, str]:
+        if variant % 2 == 0:
+            return slots
+        swapped = dict(slots)
+        swapped["analysis"], swapped["evidence"] = (
+            swapped.get("evidence", swapped.get("analysis", "")),
+            swapped.get("analysis", swapped.get("evidence", "")),
+        )
+        return swapped
+
+    def _op_cause_effect(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        if "analysis" in updated:
+            updated["analysis"] += " That cause leads to the evidence I shared."
+        return updated
+
+    def _op_highlight_decision(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        if "action" in updated:
+            updated["action"] += " This keeps your decision surface explicit."
+        return updated
+
+    def _op_invite_followup(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        updated["closing"] = (
+            updated.get("closing", "")
+            + " If you'd like more detail, point me at a specific aspect and I'll dive in."
+        ).strip()
+        return updated
+
+    def _op_amplify_emotion(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        if "analysis" in updated:
+            updated["analysis"] += " That momentum is worth leaning into."
+        return updated
+
+    def _score_candidate(self, text: str) -> float:
+        variety = self._lexical_variety(text)
+        length_penalty = 0.0
+        total_words = len(text.split())
+        if total_words < 60:
+            length_penalty = -0.05
+        elif total_words > 240:
+            length_penalty = -0.1
+        return 0.7 * variety + 0.3 * (1.0 + length_penalty)
+
+    def _lexical_variety(self, text: str) -> float:
+        tokens = [token.strip(".,!?;:").lower() for token in text.split() if token]
+        unique = {token for token in tokens if token}
+        if not tokens:
+            return 0.0
+        return len(unique) / len(tokens)

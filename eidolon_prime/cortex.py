@@ -44,7 +44,17 @@ class LogicAgent(Agent):
         memory: MemoryWeb,
         related: List[MemoryEntry],
     ) -> List[AgentResponse]:
-        analysis = f"Analyzed prompt '{prompt}' with confidence {personality.confidence:.2f}."
+        if related:
+            domain = related[0].topic.split("::")[0]
+            analysis = (
+                f"Mapped your request to {domain} patterns while keeping confidence"
+                f" at {personality.confidence:.2f}."
+            )
+        else:
+            analysis = (
+                f"Structured the prompt '{prompt}' into actionable checkpoints"
+                f" with confidence {personality.confidence:.2f}."
+            )
         return [AgentResponse(self.name, analysis)]
 
 

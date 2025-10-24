@@ -15,6 +15,8 @@ from .web_growth import WebGrowthSystem
 from .collaboration import CollaborationLayer
 from .state import PersonalityState
 from .training import TrainingGround
+from .conversation import ConversationDatastore
+from .language import GrammarDatastore, LanguageEngine
 
 
 @dataclass
@@ -39,6 +41,8 @@ class EidolonPrimeApp:
         reflection = ReflectionEngine(personality, memory)
         web_growth = WebGrowthSystem(memory, firewall)
         training = TrainingGround(memory)
+        conversation = ConversationDatastore()
+        language = LanguageEngine(GrammarDatastore())
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -56,6 +60,8 @@ class EidolonPrimeApp:
             reflection=reflection,
             training=training,
             web_growth=web_growth,
+            conversation=conversation,
+            language=language,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)
