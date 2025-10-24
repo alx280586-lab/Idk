@@ -50,8 +50,17 @@ class CollaborationLayer:
                 self.render_response(prompt, receipt.render())
                 continue
             if command == "atrain":
-                report = self._kernel.autonomous_train(payload or None)
-                self.render_response(prompt, report.render())
+                if payload and payload.lower().startswith("once"):
+                    focus = payload[4:].strip() or None
+                    report = self._kernel.autonomous_train(focus)
+                    self.render_response(prompt, report.render())
+                else:
+                    status = self._kernel.start_autonomous_training(payload or None)
+                    self.render_response(prompt, status.render())
+                continue
+            if command == "stop":
+                status = self._kernel.stop_autonomous_training()
+                self.render_response(prompt, status.render())
                 continue
             if command in {"talk", "chat"}:
                 if not payload:
@@ -91,7 +100,8 @@ class CollaborationLayer:
             "  reflect- trigger reflection cycle\n"
             "  log    - ask for a narrative explanation\n"
             "  train  - feed new knowledge into the training ground\n"
-            "  atrain - let Eidolon Prime crawl trusted sources for new lessons\n"
+            "  atrain - unleash continuous autonomous training (prefix with 'once' for a single burst)\n"
+            "  stop   - pause continuous autonomous training\n"
             "  talk   - chat with Eidolon Prime about anything on your mind\n"
             "  exit   - quit the session"
         )

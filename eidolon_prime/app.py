@@ -83,8 +83,18 @@ class EidolonPrimeApp:
                 continue
             if command == "atrain":
                 self.kernel.enforce_security(command, payload)
-                report = self.kernel.autonomous_train(payload or None)
-                self.collaboration.render_response(prompt, report.render())
+                if payload and payload.lower().startswith("once"):
+                    focus = payload[4:].strip() or None
+                    report = self.kernel.autonomous_train(focus)
+                    self.collaboration.render_response(prompt, report.render())
+                else:
+                    status = self.kernel.start_autonomous_training(payload or None)
+                    self.collaboration.render_response(prompt, status.render())
+                continue
+            if command == "stop":
+                self.kernel.enforce_security(command, payload)
+                status = self.kernel.stop_autonomous_training()
+                self.collaboration.render_response(prompt, status.render())
                 continue
             if command in {"talk", "chat"}:
                 if not payload:

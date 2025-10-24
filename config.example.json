@@ -19,6 +19,7 @@
       "log",
       "train",
       "atrain",
+      "stop",
       "talk",
       "chat"
     ],
@@ -36,6 +37,8 @@
   },
   "web": {
     "autostart": true,
+    "cycle_batch_size": 25,
+    "cycle_interval": 1.5,
     "seeds": [
       {
         "url": "https://example.com/eidolon/primer",

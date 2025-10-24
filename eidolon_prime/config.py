@@ -42,6 +42,7 @@ class SecuritySettings:
             "log",
             "train",
             "atrain",
+            "stop",
             "talk",
             "chat",
         ]
@@ -75,6 +76,8 @@ class WebSettings:
     """Controls how the web growth system bootstraps knowledge."""
 
     autostart: bool = True
+    cycle_batch_size: int = 25
+    cycle_interval: float = 1.5
     seeds: List[WebSeed] = field(
         default_factory=lambda: [
             WebSeed(
@@ -134,6 +137,8 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
         },
         "web": {
             "autostart": config.web.autostart,
+            "cycle_batch_size": config.web.cycle_batch_size,
+            "cycle_interval": config.web.cycle_interval,
             "seeds": [vars(seed) for seed in config.web.seeds],
         },
     }
@@ -150,8 +155,11 @@ def _parse_web_settings(data: dict) -> WebSettings:
         except TypeError:
             # Skip malformed entries silently but continue loading others.
             continue
+    defaults = WebSettings()
     settings = WebSettings(
-        autostart=data.get("autostart", True),
-        seeds=seeds or WebSettings().seeds,
+        autostart=data.get("autostart", defaults.autostart),
+        cycle_batch_size=data.get("cycle_batch_size", defaults.cycle_batch_size),
+        cycle_interval=data.get("cycle_interval", defaults.cycle_interval),
+        seeds=seeds or defaults.seeds,
     )
     return settings

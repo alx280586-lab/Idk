@@ -183,6 +183,206 @@ AUTONOMOUS_SOURCES: List[AutonomousSource] = [
         ),
         tags=("encyclopedia", "knowledge", "reference"),
     ),
+    AutonomousSource(
+        source="https://create.roblox.com/docs/luau/style-guide",
+        topic="roblox::luau_style",
+        summary="Roblox Luau style guide encouraging readable scripting conventions.",
+        insight=(
+            "Readable Roblox code favors descriptive variable names, module boundaries, and"
+            " consistent service access patterns to make collaboration smoother."
+        ),
+        tags=("roblox", "coding", "style"),
+    ),
+    AutonomousSource(
+        source="https://create.roblox.com/docs/production/polish/optimization",
+        topic="roblox::performance_tuning",
+        summary="Roblox optimization handbook for keeping experiences fast across devices.",
+        insight=(
+            "Profiling scripts, throttling expensive loops, and streaming assets lazily prevent"
+            " frame drops on lower-end hardware."
+        ),
+        tags=("roblox", "performance", "optimization"),
+    ),
+    AutonomousSource(
+        source="https://create.roblox.com/docs/reference/engine/classes/DataStoreService",
+        topic="roblox::data_persistence",
+        summary="DataStoreService documentation for durable Roblox experience state.",
+        insight=(
+            "Data stores demand retry logic, budget awareness, and serialization hygiene so"
+            " players never lose progress."
+        ),
+        tags=("roblox", "data", "architecture"),
+    ),
+    AutonomousSource(
+        source="https://learn.roblox.com/en-us/creator-analytics",
+        topic="roblox::analytics",
+        summary="Roblox creator analytics overview for measuring experience health.",
+        insight=(
+            "Tracking retention, session length, and funnel drop-offs guides experiments that"
+            " actually improve playtime."
+        ),
+        tags=("roblox", "analytics", "metrics"),
+    ),
+    AutonomousSource(
+        source="https://create.roblox.com/docs/production/publishing/peer-review",
+        topic="roblox::safety_review",
+        summary="Roblox peer review process for moderated publishing.",
+        insight=(
+            "Roblox peer review enforces community standards by requiring human verification"
+            " before large updates go live."
+        ),
+        tags=("roblox", "safety", "moderation"),
+    ),
+    AutonomousSource(
+        source="https://docs.python.org/3/tutorial/index.html",
+        topic="coding::python_tutorial",
+        summary="Python official tutorial detailing idiomatic language patterns.",
+        insight=(
+            "Python encourages readable modules, batteries-included libraries, and exception"
+            " driven control flow for clarity."
+        ),
+        tags=("coding", "python", "tutorial"),
+    ),
+    AutonomousSource(
+        source="https://go.dev/doc/effective_go",
+        topic="coding::effective_go",
+        summary="Effective Go guidance on idiomatic Go design decisions.",
+        insight=(
+            "Idiomatic Go leans on composition, small interfaces, and goroutines guarded by"
+            " channels for concurrency."
+        ),
+        tags=("coding", "go", "style"),
+    ),
+    AutonomousSource(
+        source="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
+        topic="web_dev::javascript_guide",
+        summary="MDN's canonical JavaScript guide covering language features and best practices.",
+        insight=(
+            "Understanding closures, prototypes, and event loops enables responsive web"
+            " interactions without race conditions."
+        ),
+        tags=("coding", "javascript", "web"),
+    ),
+    AutonomousSource(
+        source="https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA",
+        topic="web_dev::accessibility_aria",
+        summary="MDN ARIA authoring practices for inclusive interfaces.",
+        insight=(
+            "Landmark roles and labelled controls make complex widgets screen-reader friendly"
+            " without compromising interactivity."
+        ),
+        tags=("web", "accessibility", "standards"),
+    ),
+    AutonomousSource(
+        source="https://12factor.net/",
+        topic="software_practice::twelve_factor",
+        summary="The Twelve-Factor App methodology for resilient services.",
+        insight=(
+            "Strict separation of config, stateless processes, and fast startup reduces"
+            " deployment surprises in distributed systems."
+        ),
+        tags=("software", "architecture", "cloud"),
+    ),
+    AutonomousSource(
+        source="https://docs.github.com/en/actions",
+        topic="software_practice::github_actions",
+        summary="GitHub Actions documentation for automation workflows.",
+        insight=(
+            "CI pipelines stay reliable when steps are modular, cached artifacts are reused,"
+            " and secrets stay encrypted."
+        ),
+        tags=("devops", "automation", "github"),
+    ),
+    AutonomousSource(
+        source="https://kubernetes.io/docs/concepts/",
+        topic="software_practice::kubernetes_concepts",
+        summary="Kubernetes core concepts for container orchestration.",
+        insight=(
+            "Deployments, services, and config maps provide declarative knobs for rolling"
+            " updates without downtime."
+        ),
+        tags=("devops", "kubernetes", "cloud"),
+    ),
+    AutonomousSource(
+        source="https://en.wikipedia.org/wiki/Game_design",
+        topic="encyclopedia::game_design",
+        summary="Wikipedia overview of game design theory and practice.",
+        insight=(
+            "Game design blends mechanics, dynamics, and aesthetics so player motivation and"
+            " challenge remain balanced."
+        ),
+        tags=("encyclopedia", "games", "design"),
+    ),
+    AutonomousSource(
+        source="https://www.britannica.com/art/storytelling",
+        topic="encyclopedia::storytelling",
+        summary="Britannica explanation of storytelling fundamentals.",
+        insight=(
+            "Effective storytelling establishes stakes, emotional arcs, and resolution to"
+            " engage audiences deeply."
+        ),
+        tags=("encyclopedia", "story", "communication"),
+    ),
+    AutonomousSource(
+        source="https://en.wikipedia.org/wiki/Roblox",
+        topic="encyclopedia::roblox_overview",
+        summary="Wikipedia article describing Roblox history and platform structure.",
+        insight=(
+            "Roblox combines user-generated creation tools with social discovery, which is why"
+            " community insights matter for long-term success."
+        ),
+        tags=("encyclopedia", "roblox", "platform"),
+    ),
+    AutonomousSource(
+        source="https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html",
+        topic="software_practice::aws_well_architected",
+        summary="AWS Well-Architected Framework principles.",
+        insight=(
+            "Operational excellence, reliability, and cost optimization keep cloud systems"
+            " sustainable as they scale."
+        ),
+        tags=("cloud", "aws", "architecture"),
+    ),
+    AutonomousSource(
+        source="https://refactoring.guru/design-patterns",
+        topic="software_practice::design_patterns",
+        summary="Catalog of software design patterns from Refactoring Guru.",
+        insight=(
+            "Patterns like observer, strategy, and builder offer shared vocabulary for"
+            " repeatable design problems."
+        ),
+        tags=("software", "design", "patterns"),
+    ),
+    AutonomousSource(
+        source="https://www.sqlite.org/whentouse.html",
+        topic="software_practice::sqlite_guidance",
+        summary="SQLite guidance on appropriate usage scenarios.",
+        insight=(
+            "SQLite shines for embedded and local-first applications while heavier client-server"
+            " databases suit concurrent writes."
+        ),
+        tags=("database", "architecture", "storage"),
+    ),
+    AutonomousSource(
+        source="https://www.postgresql.org/docs/current/",
+        topic="software_practice::postgresql_basics",
+        summary="PostgreSQL documentation for relational database capabilities.",
+        insight=(
+            "ACID transactions, advanced indexing, and procedural extensions make PostgreSQL"
+            " versatile for data-intensive work."
+        ),
+        tags=("database", "postgresql", "sql"),
+    ),
+    AutonomousSource(
+        source="https://docs.python.org/3/library/asyncio.html",
+        topic="coding::python_asyncio",
+        summary="Asyncio documentation covering asynchronous programming in Python.",
+        insight=(
+            "Event loops and awaitable coroutines let Python services juggle I/O without"
+            " blocking threads."
+        ),
+        tags=("python", "async", "programming"),
+    ),
 ]
 
 
