@@ -19,6 +19,7 @@ from .conversation import ConversationDatastore
 from .language import GrammarDatastore, LanguageEngine
 from .speech import SpeechAcademy
 from .comprehension import MessageComprehender
+from .synthetic import SyntheticThoughtEngine
 
 
 @dataclass
@@ -42,6 +43,12 @@ class EidolonPrimeApp:
         forge = Forge(memory)
         reflection = ReflectionEngine(personality, memory)
         web_growth = WebGrowthSystem(memory, firewall)
+        synthetic = SyntheticThoughtEngine(
+            parameter_count=config.synthetic.parameter_count,
+            context_vault_size=config.synthetic.context_vault_size,
+            max_harvest_queries=config.synthetic.max_harvest_queries,
+        )
+        web_growth.register_additional_sources(synthetic.build_autonomous_sources())
         training = TrainingGround(memory)
         conversation = ConversationDatastore()
         language = LanguageEngine(GrammarDatastore())
@@ -53,6 +60,7 @@ class EidolonPrimeApp:
             memory=memory,
             reflection=reflection,
             web_growth=web_growth,
+            synthetic=synthetic,
         )
         kernel = Kernel(
             config=config,
@@ -68,6 +76,7 @@ class EidolonPrimeApp:
             language=language,
             speech=speech_academy,
             comprehension=comprehension,
+            synthetic=synthetic,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)

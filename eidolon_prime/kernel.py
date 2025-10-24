@@ -21,6 +21,7 @@ from .speech import SpeechAcademy
 from .dataset import load_seed_training_corpus
 from .curriculum import load_foundational_datastores
 from .comprehension import MessageComprehender, MessageUnderstanding
+from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 
 
 @dataclass
@@ -30,6 +31,7 @@ class ChatResult:
     prompt: str
     reply: str
     analysis: CortexResult
+    plan: Optional[SyntheticThoughtPlan] = None
 
     def render(self) -> str:
         lines = [
@@ -41,6 +43,8 @@ class ChatResult:
             "🧠 Reasoning Trail:",
             self.analysis.render(),
         ]
+        if self.plan:
+            lines.extend(["", "🧩 Synthetic Thought Plan:", self.plan.render()])
         return "\n".join(lines)
 
 
@@ -88,6 +92,7 @@ class Kernel:
         language: LanguageEngine,
         speech: SpeechAcademy,
         comprehension: MessageComprehender,
+        synthetic: SyntheticThoughtEngine,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -102,6 +107,7 @@ class Kernel:
         self._language = language
         self._speech = speech
         self._comprehension = comprehension
+        self._synthetic = synthetic
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -134,13 +140,19 @@ class Kernel:
             self._conversation.ingest_highlights(
                 ((record.topic, record.content, record.content),)
             )
+        self._synthetic.observe_training_report(
+            f"manual-train::{record.topic}::{record.content}"
+        )
         return record
 
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
         understanding = self._comprehension.analyse(message)
         self._speech.observe_message(message, self._memory)
-        analysis = self._cortex.process(message, understanding=understanding)
+        plan = self._synthetic.plan(message, understanding, self._memory)
+        analysis = self._cortex.process(
+            message, understanding=understanding, plan=plan
+        )
         refresh_report: AutoTrainingReport | None = None
         if self._should_refresh_context(message, analysis, understanding):
             focus_query = understanding.focus_text() or message
@@ -151,10 +163,30 @@ class Kernel:
                 0.66,
                 "autonomous_web",
             )
-            analysis = self._cortex.process(message, understanding=understanding)
+            plan = self._synthetic.plan(message, understanding, self._memory)
+            analysis = self._cortex.process(
+                message, understanding=understanding, plan=plan
+            )
             analysis.reasoning_summary = (
                 analysis.reasoning_summary
                 + f" I refreshed context with a web-assisted practice batch (stage {refresh_report.curriculum_stage}, quiz {refresh_report.quiz_score:.2f})."
+            )
+        harvested_reports: List[AutoTrainingReport] = []
+        processed_queries = set()
+        for query in plan.harvest_queries[: self._config.synthetic.max_harvest_queries]:
+            normalized = query.lower()
+            if normalized in processed_queries:
+                continue
+            processed_queries.add(normalized)
+            report = self.autonomous_train(query, batch_size=8)
+            harvested_reports.append(report)
+        if harvested_reports:
+            plan = self._synthetic.plan(message, understanding, self._memory)
+            analysis = self._cortex.process(
+                message, understanding=understanding, plan=plan
+            )
+            analysis.reasoning_summary += (
+                f" Synthetic plan harvested {len(harvested_reports)} extra knowledge batches."
             )
         intent, affect = self._infer_intent_and_affect(message, understanding)
         pattern = self._conversation.select_pattern(intent, affect)
@@ -167,7 +199,7 @@ class Kernel:
             for index, highlight in enumerate(understanding.highlights(), start=1)
         )
         frame = self._build_semantic_frame(
-            message, intent, affect, analysis, pattern, understanding
+            message, intent, affect, analysis, pattern, understanding, plan
         )
         reply_body, lexical = self._language.compose_reply(
             frame,
@@ -180,7 +212,9 @@ class Kernel:
         response_delay = max(0.0, min(2.0, self._config.resources.response_delay))
         if response_delay:
             time.sleep(response_delay)
-        success_score = self._estimate_success(analysis, lexical, len(frame.evidence))
+        success_score = self._estimate_success(
+            analysis, lexical, len(frame.evidence), plan
+        )
         self._conversation.register_turn(
             pattern.pattern_id,
             intent=intent,
@@ -216,7 +250,20 @@ class Kernel:
                 0.64,
                 "autonomous_web",
             )
-        return ChatResult(message, reply, analysis)
+        for report in harvested_reports:
+            self._memory.record(
+                "conversation::synthetic_harvest",
+                report.render(),
+                0.63,
+                "autonomous_web",
+            )
+        self._memory.record(
+            "conversation::synthetic_plan",
+            plan.render(),
+            0.69,
+            "synthetic_plan",
+        )
+        return ChatResult(message, reply, analysis, plan)
 
     def autonomous_train(
         self, focus: str | None = None, *, batch_size: Optional[int] = None
@@ -267,6 +314,7 @@ class Kernel:
             )
             for highlight in report.highlights
         )
+        self._synthetic.observe_training_report(summary_text)
         return report
 
     def start_autonomous_training(
@@ -394,13 +442,18 @@ class Kernel:
         analysis: CortexResult,
         pattern: ConversationPattern,
         understanding: MessageUnderstanding,
+        plan: Optional[SyntheticThoughtPlan],
     ) -> SemanticFrame:
-        topic = self._derive_topic(message, analysis.related_memories, understanding)
-        key_points = self._extract_key_points(
-            analysis.responses, analysis.reasoning_summary, understanding
+        topic = self._derive_topic(
+            message, analysis.related_memories, understanding, plan
         )
-        evidence = self._extract_evidence(analysis.related_memories, understanding)
-        actions = self._extract_actions(analysis, understanding)
+        key_points = self._extract_key_points(
+            analysis.responses, analysis.reasoning_summary, understanding, plan
+        )
+        evidence = self._extract_evidence(
+            analysis.related_memories, understanding, plan
+        )
+        actions = self._extract_actions(analysis, understanding, plan)
         emotional_tone = self._derive_emotional_tone(pattern.tone, affect, understanding)
         call_to_action = self._craft_call_to_action(analysis, actions, understanding)
         outcome = analysis.reflection.rationale
@@ -421,6 +474,7 @@ class Kernel:
         message: str,
         memories: Iterable[MemoryEntry],
         understanding: MessageUnderstanding,
+        plan: Optional[SyntheticThoughtPlan],
     ) -> str:
         memory_list = list(memories)
         if memory_list:
@@ -429,6 +483,11 @@ class Kernel:
             if parts:
                 topic_text = " → ".join(parts[:3])
             return topic_text
+        if plan:
+            if plan.focus_pairs:
+                return plan.focus_pairs[0]
+            if plan.focus_terms:
+                return " ".join(plan.focus_terms[:4])
         if understanding.focus_pairs:
             return understanding.focus_pairs[0]
         if understanding.focus_terms:
@@ -441,6 +500,7 @@ class Kernel:
         responses: Iterable[AgentResponse],
         reasoning_summary: str,
         understanding: MessageUnderstanding,
+        plan: Optional[SyntheticThoughtPlan],
     ) -> List[str]:
         insights = []
         for highlight in understanding.highlights():
@@ -452,12 +512,21 @@ class Kernel:
                 insights.append(humanized)
             if len(insights) >= 4:
                 break
+        if plan:
+            for outline in plan.outline[:3]:
+                if outline not in insights:
+                    insights.append(outline)
+                    if len(insights) >= 6:
+                        break
         if not insights and reasoning_summary:
             insights.append(reasoning_summary)
         return insights
 
     def _extract_actions(
-        self, analysis: CortexResult, understanding: MessageUnderstanding
+        self,
+        analysis: CortexResult,
+        understanding: MessageUnderstanding,
+        plan: Optional[SyntheticThoughtPlan],
     ) -> List[str]:
         actions: List[str] = []
         for result in analysis.experiments:
@@ -472,6 +541,9 @@ class Kernel:
             clean_clause = clause.strip().rstrip(".")
             if clean_clause and clean_clause not in actions:
                 actions.append(f"address your request to {clean_clause}")
+        if plan and plan.harvest_queries:
+            harvest = "; ".join(plan.harvest_queries[:2])
+            actions.append(f"research trusted sources via: {harvest}")
         return actions[:4]
 
     def _humanize_insight(self, response: AgentResponse) -> str:
@@ -486,6 +558,8 @@ class Kernel:
             return text.replace("Checked prompt", "Ethics review confirms", 1)
         if response.agent == "reasoning" and text.startswith("Synthesized"):
             return text.replace("Synthesized", "I synthesized", 1)
+        if response.agent == "synthetic" and text.startswith("Focus:"):
+            return text.replace("Focus:", "Synthetic plan focus:", 1)
         return text
 
     def _summarize_experiment(self, description: str) -> str:
@@ -498,7 +572,10 @@ class Kernel:
         return text.rstrip(".")
 
     def _extract_evidence(
-        self, memories: Iterable[MemoryEntry], understanding: MessageUnderstanding
+        self,
+        memories: Iterable[MemoryEntry],
+        understanding: MessageUnderstanding,
+        plan: Optional[SyntheticThoughtPlan],
     ) -> List[str]:
         evidence_lines: List[str] = []
         for entry in list(memories)[:4]:
@@ -514,6 +591,9 @@ class Kernel:
                 + ", ".join(understanding.focus_terms[:4])
                 + " (derived from your wording)."
             )
+        if plan and plan.context_links:
+            for link in plan.context_links[:3]:
+                evidence_lines.append(f"Context vault: {link}")
         return evidence_lines
 
     def _derive_emotional_tone(
@@ -547,7 +627,11 @@ class Kernel:
         )
 
     def _estimate_success(
-        self, analysis: CortexResult, lexical: float, evidence_count: int
+        self,
+        analysis: CortexResult,
+        lexical: float,
+        evidence_count: int,
+        plan: Optional[SyntheticThoughtPlan] = None,
     ) -> float:
         base = 0.55 + 0.25 * min(1.0, lexical)
         if analysis.reflection.accepted:
@@ -556,6 +640,8 @@ class Kernel:
         if analysis.experiments:
             successful = sum(1 for result in analysis.experiments if result.success)
             base += min(0.07, successful * 0.02)
+        if plan and plan.module_traces:
+            base += min(0.05, len(plan.module_traces) * 0.01)
         return max(0.0, min(1.0, base))
 
     def enforce_security(self, command: str, payload: str) -> None:
@@ -570,6 +656,7 @@ class Kernel:
         if not self._seed_initialized:
             seeded = load_seed_training_corpus(self._memory)
             foundations = load_foundational_datastores(self._memory)
+            synthetic_counts = self._synthetic.seed_memory(self._memory)
             if seeded:
                 self._personality.adjust(confidence=0.08, curiosity=0.05, integrity=0.03)
             if foundations:
@@ -580,6 +667,14 @@ class Kernel:
                     f"Loaded foundational datasets: {foundations} (total {total}).",
                     0.82,
                     "system",
+                )
+            if synthetic_counts:
+                total_synth = sum(synthetic_counts.values())
+                self._memory.record(
+                    "synthetic::foundation",
+                    f"Seeded synthetic datastores: {synthetic_counts} (total {total_synth}).",
+                    0.8,
+                    "synthetic_datastore",
                 )
             practice = self._speech.run_batch(
                 focus="foundational conversation",

@@ -94,6 +94,15 @@ class WebSettings:
 
 
 @dataclass
+class SyntheticSettings:
+    """Controls the procedural+parametric hybrid thought engine."""
+
+    parameter_count: int = 3_200_000
+    context_vault_size: int = 360
+    max_harvest_queries: int = 4
+
+
+@dataclass
 class EidolonConfig:
     """Top level configuration object for the engine."""
 
@@ -101,6 +110,7 @@ class EidolonConfig:
     personality: PersonalitySettings = field(default_factory=PersonalitySettings)
     security: SecuritySettings = field(default_factory=SecuritySettings)
     web: WebSettings = field(default_factory=WebSettings)
+    synthetic: SyntheticSettings = field(default_factory=SyntheticSettings)
 
 
 def load_config(path: Optional[str] = None) -> EidolonConfig:
@@ -117,6 +127,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         personality=PersonalitySettings(**data.get("personality", {})),
         security=SecuritySettings(**data.get("security", {})),
         web=_parse_web_settings(data.get("web", {})),
+        synthetic=SyntheticSettings(**data.get("synthetic", {})),
     )
 
 
@@ -139,6 +150,11 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "cycle_batch_size": config.web.cycle_batch_size,
             "cycle_interval": config.web.cycle_interval,
             "seeds": [vars(seed) for seed in config.web.seeds],
+        },
+        "synthetic": {
+            "parameter_count": config.synthetic.parameter_count,
+            "context_vault_size": config.synthetic.context_vault_size,
+            "max_harvest_queries": config.synthetic.max_harvest_queries,
         },
     }
     with file_path.open("w", encoding="utf-8") as handle:

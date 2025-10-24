@@ -9,6 +9,7 @@ from .forge import Forge
 from .memory import MemoryWeb, MemoryEntry
 from .reflection import ReflectionEngine, ReflectionReport
 from .web_growth import WebGrowthSystem, WebFinding
+from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 from .comprehension import MessageUnderstanding
 
 
@@ -115,10 +116,14 @@ class ReasoningAgent(Agent):
     ) -> List[AgentResponse]:
         lowered = prompt.lower().strip()
         understanding: Optional[MessageUnderstanding] = None
+        plan: Optional[SyntheticThoughtPlan] = None
         if context:
             candidate = context.get("understanding")
             if isinstance(candidate, MessageUnderstanding):
                 understanding = candidate
+            plan_candidate = context.get("synthetic_plan")
+            if isinstance(plan_candidate, SyntheticThoughtPlan):
+                plan = plan_candidate
         tokens = _keywords(lowered)
         steps: List[str] = []
         if _looks_like_greeting(lowered):
@@ -148,6 +153,14 @@ class ReasoningAgent(Agent):
                 + "; ".join(understanding.command_clauses[:2])
                 + " and will respond to each explicitly."
             )
+        if plan:
+            steps.append(
+                "Synthetic thought engine recommended "
+                + ", ".join(trace.module for trace in plan.module_traces[:3])
+                + " to keep reasoning exhaustive."
+            )
+            if plan.outline:
+                steps.append(plan.outline[0])
         reasoning_tracks = [entry for entry in related if entry.topic.startswith("reasoning::")]
         if reasoning_tracks:
             focus = reasoning_tracks[0].topic.split("::")[1:4]
@@ -172,6 +185,38 @@ class ReasoningAgent(Agent):
         narrative = " ".join(steps)
         conclusion = "That plan shapes a grounded response that stays relevant to what you asked."
         return [AgentResponse(self.name, f"{narrative} {conclusion}")]
+
+
+class SyntheticAgent(Agent):
+    name = "synthetic"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        if not context:
+            return [AgentResponse(self.name, "Synthetic modules idle; no context supplied.")]
+        plan = context.get("synthetic_plan")
+        if not isinstance(plan, SyntheticThoughtPlan):
+            return [AgentResponse(self.name, "Synthetic plan not available for this turn.")]
+        headline = plan.summary()
+        outline = plan.outline[:2]
+        detail = " ".join(outline) if outline else "Preparing baseline outline."
+        harvest_hint = (
+            f" Target web harvest: {', '.join(plan.harvest_queries[:2])}."
+            if plan.harvest_queries
+            else ""
+        )
+        return [
+            AgentResponse(
+                self.name,
+                f"{headline}. {detail}{harvest_hint}",
+            )
+        ]
 
 
 def _keywords(text: str) -> List[str]:
@@ -213,16 +258,19 @@ class Cortex:
         memory: MemoryWeb,
         reflection: ReflectionEngine,
         web_growth: WebGrowthSystem,
+        synthetic: SyntheticThoughtEngine,
     ) -> None:
         self._personality = personality
         self._forge = forge
         self._memory = memory
         self._reflection = reflection
         self._web_growth = web_growth
+        self._synthetic = synthetic
         self._agents: List[Agent] = [
             LogicAgent(),
             CuriosityAgent(),
             EthicsAgent(),
+            SyntheticAgent(),
             ReasoningAgent(),
         ]
 
@@ -230,6 +278,7 @@ class Cortex:
         self,
         prompt: str,
         understanding: Optional[MessageUnderstanding] = None,
+        plan: Optional[SyntheticThoughtPlan] = None,
     ) -> "CortexResult":
         responses: List[AgentResponse] = []
         query = prompt
@@ -238,6 +287,10 @@ class Cortex:
             if focus_text:
                 query = f"{prompt} || {focus_text}"
         related = self._memory.search(query, limit=7)
+        generated_plan = plan
+        if generated_plan is None and understanding is not None:
+            generated_plan = self._synthetic.plan(prompt, understanding, self._memory)
+        plan = generated_plan
         if len(related) < 3:
             focus = understanding.focus_text() if understanding else prompt
             report = self._web_growth.autonomous_training(focus, batch_size=10)
@@ -251,6 +304,8 @@ class Cortex:
         context: Dict[str, object] = {}
         if understanding:
             context["understanding"] = understanding
+        if plan:
+            context["synthetic_plan"] = plan
         for agent in self._agents:
             responses.extend(
                 agent.generate(
@@ -267,7 +322,7 @@ class Cortex:
         self._memory.record("prompt", prompt, 0.6, "cortex")
         policy = self._web_growth.describe_policy()
         reasoning_summary = self._summarize_reasoning(
-            prompt, related, experiments, understanding
+            prompt, related, experiments, understanding, plan
         )
         return CortexResult(responses, experiments, reflection, policy, related, reasoning_summary)
 
@@ -277,6 +332,7 @@ class Cortex:
         related: List[MemoryEntry],
         experiments: List,
         understanding: Optional[MessageUnderstanding] = None,
+        plan: Optional[SyntheticThoughtPlan] = None,
     ) -> str:
         if not related:
             if understanding and understanding.focus_terms:
@@ -285,7 +341,10 @@ class Cortex:
                     "I am exploring the prompt without a direct precedent in memory, "
                     f"so I'm leaning on your highlighted terms: {focus}."
                 )
-            return "I am exploring the prompt without a direct precedent in memory."
+            summary = "I am exploring the prompt without a direct precedent in memory."
+            if plan:
+                summary += " Synthetic modules keep the plan structured despite the gap."
+            return summary
         dominant_topics = {}
         for entry in related:
             head = entry.topic.split("::")[0]
@@ -300,9 +359,19 @@ class Cortex:
                 + ", ".join(understanding.focus_pairs[:3])
                 + "."
             )
+        synthetic_clause = ""
+        if plan:
+            synthetic_clause = (
+                " Synthetic plan engaged modules "
+                + ", ".join(trace.module for trace in plan.module_traces[:3])
+                + " and recommended "
+                + (plan.outline[0] if plan.outline else "a verification loop")
+                + "."
+            )
         return (
             f"I mapped your prompt '{prompt}' to the domain '{focus_domain}' using the strongest training overlaps. "
-            f"Experiments such as {experiment_summary} confirm that the retrieved lessons align with your request.{detail}"
+            f"Experiments such as {experiment_summary} confirm that the retrieved lessons align with your request.{detail}"\
+            f"{synthetic_clause}"
         )
 
     def register_finding(self, finding: WebFinding) -> int:

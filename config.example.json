@@ -50,5 +50,10 @@
         "summary": "Safety checklist for verifying experiments before adoption."
       }
     ]
+  },
+  "synthetic": {
+    "parameter_count": 3200000,
+    "context_vault_size": 360,
+    "max_harvest_queries": 4
   }
 }

@@ -129,6 +129,19 @@ class WebGrowthSystem:
             for stage in self._curriculum_stages
         }
 
+    def register_additional_sources(
+        self, sources: Iterable[AutonomousSource]
+    ) -> None:
+        """Expand the trusted source list with synthetic catalogues."""
+
+        seen = {(source.source, source.topic) for source in AUTONOMOUS_SOURCES}
+        for source in sources:
+            key = (source.source, source.topic)
+            if key in seen:
+                continue
+            AUTONOMOUS_SOURCES.append(source)
+            seen.add(key)
+
     def integrate(self, findings: Iterable[WebFinding]) -> int:
         imported = 0
         for finding in findings:
