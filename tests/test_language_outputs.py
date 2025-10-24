@@ -88,6 +88,13 @@ class LanguageOutputTests(unittest.TestCase):
             "Peer dialogue report should render a descriptive summary.",
         )
 
+    def test_grammar_rule_inventory_reports_million_rules(self) -> None:
+        self.assertGreaterEqual(
+            self.app.kernel.grammar_rule_inventory(),
+            1_000_000,
+            "Grammar datastore should expose at least one million conversational rules.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

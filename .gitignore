@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 /.venv/
 config.json
+/.eidolon_vault/
+trace.json

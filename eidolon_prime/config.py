@@ -110,6 +110,16 @@ class SyntheticSettings:
 
 
 @dataclass
+class ParameterVaultSettings:
+    """Configures the on-disk virtualised parameter vault."""
+
+    root_path: str = ".eidolon_vault"
+    target_parameters: int = 2_000_000_000
+    shard_size: int = 50_000_000
+    virtualization_factor: int = 1_024
+
+
+@dataclass
 class NeuralSettings:
     """Configures the ultra neural mesh used for conversational fluency."""
 
@@ -121,6 +131,7 @@ class NeuralSettings:
     )
     ollama_model: Optional[str] = None
     ollama_timeout: float = 4.0
+    vault: ParameterVaultSettings = field(default_factory=ParameterVaultSettings)
 
 
 @dataclass
@@ -177,7 +188,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         security=SecuritySettings(**data.get("security", {})),
         web=_parse_web_settings(data.get("web", {})),
         synthetic=SyntheticSettings(**data.get("synthetic", {})),
-        neural=NeuralSettings(**data.get("neural", {})),
+        neural=_parse_neural_settings(data.get("neural", {})),
         orchestrator=OrchestratorSettings(**data.get("orchestrator", {})),
         peer_training=PeerTrainingSettings(**data.get("peer_training", {})),
     )
@@ -217,6 +228,12 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "layers": config.neural.layers,
             "ollama_model": config.neural.ollama_model,
             "ollama_timeout": config.neural.ollama_timeout,
+            "vault": {
+                "root_path": config.neural.vault.root_path,
+                "target_parameters": config.neural.vault.target_parameters,
+                "shard_size": config.neural.vault.shard_size,
+                "virtualization_factor": config.neural.vault.virtualization_factor,
+            },
         },
         "orchestrator": {"trace_path": config.orchestrator.trace_path},
         "peer_training": {
@@ -233,21 +250,36 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
 
 def _parse_web_settings(data: dict) -> WebSettings:
     seeds_data = data.get("seeds", [])
-    seeds = []
+    seeds: List[WebSeed] = []
     for entry in seeds_data:
         try:
             seeds.append(WebSeed(**entry))
         except TypeError:
-            # Skip malformed entries silently but continue loading others.
             continue
     defaults = WebSettings()
-    settings = WebSettings(
+    return WebSettings(
         autostart=data.get("autostart", defaults.autostart),
         cycle_batch_size=data.get("cycle_batch_size", defaults.cycle_batch_size),
         cycle_interval=data.get("cycle_interval", defaults.cycle_interval),
         unrestricted_access=data.get("unrestricted_access", defaults.unrestricted_access),
         trust_threshold=data.get("trust_threshold", defaults.trust_threshold),
         max_open_web_samples=data.get("max_open_web_samples", defaults.max_open_web_samples),
+        interactive_research_batch=data.get(
+            "interactive_research_batch", defaults.interactive_research_batch
+        ),
         seeds=seeds or defaults.seeds,
     )
-    return settings
+
+
+def _parse_neural_settings(data: dict) -> NeuralSettings:
+    defaults = NeuralSettings()
+    layers = data.get("layers")
+    if layers is None:
+        layers = list(defaults.layers)
+    return NeuralSettings(
+        parameter_count=data.get("parameter_count", defaults.parameter_count),
+        layers=layers,
+        ollama_model=data.get("ollama_model", defaults.ollama_model),
+        ollama_timeout=data.get("ollama_timeout", defaults.ollama_timeout),
+        vault=ParameterVaultSettings(**data.get("vault", {})),
+    )

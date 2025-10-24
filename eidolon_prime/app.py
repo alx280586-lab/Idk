@@ -34,6 +34,7 @@ from .neural import UltraNeuralNetwork, NarrowCollective, NarrowSpecialist
 from .ollama import OllamaBridge
 from .distillation import DistillationCoach
 from .peer_training import PeerDialogueTrainer
+from .parameter_vault import ParameterVault
 
 
 @dataclass
@@ -99,10 +100,17 @@ class EidolonPrimeApp:
             timeout=config.neural.ollama_timeout,
         )
         distillation = DistillationCoach(memory, conversation, ollama_bridge)
+        parameter_vault = ParameterVault(
+            config.neural.vault.root_path,
+            shard_size=config.neural.vault.shard_size,
+            virtualization_factor=config.neural.vault.virtualization_factor,
+        )
+        parameter_vault.ensure_capacity(config.neural.vault.target_parameters)
         neural = UltraNeuralNetwork(
             parameter_count=config.neural.parameter_count,
             layers=config.neural.layers,
             ollama=ollama_bridge,
+            vault=parameter_vault,
         )
         collective = NarrowCollective(
             specialists=[

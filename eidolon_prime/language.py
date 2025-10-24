@@ -1,8 +1,11 @@
 """Grammar datastore and language realization utilities."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple
+
+from .comprehension import MessageUnderstanding
 
 _ROBLOX_SNIPPETS: Dict[str, str] = {
     "quest": "\n".join(
@@ -410,6 +413,114 @@ _DEFAULT_REGISTERS: Tuple[RegisterPack, ...] = (
 )
 
 
+class ProceduralGrammarFactory:
+    """Generates millions of conversational rule variations lazily."""
+
+    def __init__(
+        self, templates: Sequence[GrammarTemplate], registers: Sequence[RegisterPack]
+    ) -> None:
+        self.rule_count = 1_000_000
+        self._template_ids = [template.template_id for template in templates]
+        self._register_names = [register.name for register in registers]
+        self._intros = (
+            "It's good to hear from you.",
+            "Thanks for keeping me in the loop.",
+            "Always glad to catch up with you.",
+            "I'm tuned in and listening closely.",
+            "Appreciate you sharing your thoughts.",
+        )
+        self._followups = (
+            "I'm logging how {topic} feels for you so I respond naturally.",
+            "Let's keep {topic} centred while we explore options together.",
+            "I'll keep {topic} in focus and mirror your tone as we continue.",
+            "Your phrasing around {topic} helps me align the response cadence.",
+            "{call_to_action}—I'll stay ready to build on {topic} the moment you ask.",
+        )
+        self._questions = (
+            "What should we dig into next about {topic}?",
+            "Is there a specific angle on {topic} you want me to elaborate on?",
+            "Should we connect {topic} to another goal you're thinking about?",
+            "When you're ready, what would be the ideal next step for {topic}?",
+            "How would you like the discussion around {topic} to evolve?",
+        )
+        self._bridges = (
+            "Hearing the nuance in",
+            "Echoing the meaning inside",
+            "Staying aligned with",
+            "Keeping pace with",
+            "Following the sentiment around",
+        )
+
+    def _index(self, signature: str) -> int:
+        digest = hashlib.blake2b(signature.encode("utf-8"), digest_size=8)
+        return int.from_bytes(digest.digest(), "big") % self.rule_count
+
+    def enrich(
+        self,
+        frame: SemanticFrame,
+        register: RegisterPack,
+        variant: int,
+        sentences: Dict[str, str],
+    ) -> Dict[str, str]:
+        signature = (
+            f"{frame.intent}|{frame.topic}|{register.name}|{variant}|"
+            f"{len(frame.key_points)}|{len(frame.actions)}|{frame.emotional_tone}"
+        )
+        index = self._index(signature)
+        topic = frame.condensed_topic()
+        call_to_action = frame.call_to_action or "Feel free to steer the next step."
+        intro = self._intro_phrase(index, topic)
+        follow = self._followup_phrase(index, topic, call_to_action)
+        question = self._question_phrase(index, topic)
+        sentences.setdefault("conversation_intro", intro)
+        sentences.setdefault("conversation_followup", follow)
+        sentences.setdefault("conversation_question", question)
+        sentences.setdefault(
+            "conversation_register",
+            self._register_names[index % len(self._register_names)],
+        )
+        sentences.setdefault(
+            "conversation_template",
+            self._template_ids[index % len(self._template_ids)],
+        )
+        return sentences
+
+    def compose_smalltalk(self, understanding: MessageUnderstanding) -> Tuple[str, float]:
+        acknowledgement = (
+            understanding.sentences[0]
+            if understanding.sentences
+            else understanding.original.strip()
+        )
+        topic = understanding.topic_hint() or "what's on your mind"
+        signature = f"{acknowledgement}|{topic}|{len(understanding.tokens)}"
+        index = self._index(signature)
+        intro = self._intro_phrase(index, topic)
+        if acknowledgement:
+            intro = f"{intro} I heard \"{acknowledgement}\".".strip()
+        follow = self._followup_phrase(
+            index,
+            topic,
+            "If something specific pops up, just let me know.",
+        )
+        question = self._question_phrase(index, topic)
+        reply = f"{intro} {follow} {question}".strip()
+        unique_tokens = len({token for token in understanding.tokens if len(token) > 2})
+        lexical = min(0.98, 0.52 + 0.02 * unique_tokens)
+        return reply, lexical
+
+    def _intro_phrase(self, index: int, topic: str) -> str:
+        phrase = self._intros[index % len(self._intros)]
+        bridge = self._bridges[index % len(self._bridges)]
+        return f"{phrase} {bridge} {topic}."
+
+    def _followup_phrase(self, index: int, topic: str, call_to_action: str) -> str:
+        phrase = self._followups[index % len(self._followups)]
+        return phrase.format(topic=topic, call_to_action=call_to_action)
+
+    def _question_phrase(self, index: int, topic: str) -> str:
+        prompt = self._questions[index % len(self._questions)]
+        return prompt.format(topic=topic)
+
 class GrammarDatastore:
     """Provides templates and register packs for the language engine."""
 
@@ -420,6 +531,9 @@ class GrammarDatastore:
         self._registers: Dict[str, RegisterPack] = {
             register.name: register for register in _DEFAULT_REGISTERS
         }
+        self._procedural = ProceduralGrammarFactory(
+            _DEFAULT_TEMPLATES, _DEFAULT_REGISTERS
+        )
 
     def template_for_structure(self, structure: str) -> GrammarTemplate:
         lookup = {
@@ -466,7 +580,13 @@ class GrammarDatastore:
         sentences: Dict[str, str] = {}
         for slot, pattern in template.slots.items():
             sentences[slot] = pattern.format(**context)
-        return sentences
+        return self._procedural.enrich(frame, register, variant, sentences)
+
+    def compose_smalltalk(self, understanding: MessageUnderstanding) -> Tuple[str, float]:
+        return self._procedural.compose_smalltalk(understanding)
+
+    def rule_inventory_size(self) -> int:
+        return len(self._templates) + self._procedural.rule_count
 
     def _build_context(
         self, frame: SemanticFrame, register: RegisterPack, variant: int
@@ -807,6 +927,12 @@ class LanguageEngine:
     def __init__(self, datastore: GrammarDatastore) -> None:
         self._datastore = datastore
 
+    def compose_smalltalk(self, understanding: MessageUnderstanding) -> Tuple[str, float]:
+        return self._datastore.compose_smalltalk(understanding)
+
+    def rule_inventory_size(self) -> int:
+        return self._datastore.rule_inventory_size()
+
     def compose_reply(
         self,
         frame: SemanticFrame,
@@ -862,6 +988,15 @@ class LanguageEngine:
     ) -> List[str]:
         structure_parts = structure.split("→")
         paragraphs: List[str] = []
+        conversation_sentences = [
+            sentence.strip()
+            for sentence in (
+                slots.get("conversation_intro"),
+                slots.get("conversation_followup"),
+                slots.get("conversation_question"),
+            )
+            if sentence and sentence.strip()
+        ]
         intro = [slots.get("introduction", "")]
         intro_text = " ".join(part for part in intro if part).strip()
         if intro_text:
@@ -876,11 +1011,17 @@ class LanguageEngine:
                     paragraphs.append(sentence)
             if slots.get("closing"):
                 paragraphs.append(slots["closing"])
+            for sentence in conversation_sentences:
+                if sentence not in paragraphs:
+                    paragraphs.append(sentence)
             return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
         if creative_segments.intersection(structure_parts):
             for key in ("hook", "development", "turn", "resolution", "reflection"):
                 sentence = slots.get(key)
                 if sentence:
+                    paragraphs.append(sentence)
+            for sentence in conversation_sentences:
+                if sentence not in paragraphs:
                     paragraphs.append(sentence)
             return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
         if news_segments.intersection(structure_parts):
@@ -890,6 +1031,9 @@ class LanguageEngine:
                     paragraphs.append(sentence)
             if slots.get("closing"):
                 paragraphs.append(slots["closing"])
+            for sentence in conversation_sentences:
+                if sentence not in paragraphs:
+                    paragraphs.append(sentence)
             return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
         body_sentences: List[str] = []
         for segment in structure_parts:
@@ -904,6 +1048,9 @@ class LanguageEngine:
             paragraphs.append(" ".join(body_sentences))
         if slots.get("closing"):
             paragraphs.append(slots["closing"])
+        for sentence in conversation_sentences:
+            if sentence not in paragraphs:
+                paragraphs.append(sentence)
         return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
 
     def _segment_to_slot(self, segment: str) -> str:

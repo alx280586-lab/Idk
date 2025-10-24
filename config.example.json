@@ -73,7 +73,13 @@
       "expression"
     ],
     "ollama_model": null,
-    "ollama_timeout": 4.0
+    "ollama_timeout": 4.0,
+    "vault": {
+      "root_path": ".eidolon_vault",
+      "target_parameters": 2000000000,
+      "shard_size": 50000000,
+      "virtualization_factor": 1024
+    }
   },
   "orchestrator": {
     "trace_path": "trace.json"

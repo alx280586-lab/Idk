@@ -4,12 +4,15 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from math import sqrt
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, TYPE_CHECKING
 
 from .comprehension import MessageUnderstanding
 from .synthetic import SyntheticThoughtPlan
 from .orchestrator import OrchestratorResult
 from .ollama import OllamaBridge
+
+if TYPE_CHECKING:
+    from .parameter_vault import ParameterVault
 
 
 @dataclass
@@ -50,10 +53,21 @@ class UltraNeuralNetwork:
         parameter_count: int,
         layers: Sequence[str],
         ollama: Optional[OllamaBridge] = None,
+        vault: Optional["ParameterVault"] = None,
     ) -> None:
-        self.parameter_count = int(parameter_count)
         self._layers = list(layers)
         self._ollama = ollama
+        self._vault = vault
+        if self._vault:
+            if self._vault.total_parameters() < parameter_count:
+                self._vault.ensure_capacity(parameter_count)
+            total = self._vault.total_parameters()
+            if not total:
+                self._vault.ensure_capacity(max(parameter_count, 1_000_000))
+                total = self._vault.total_parameters()
+            self.parameter_count = max(int(parameter_count), total)
+        else:
+            self.parameter_count = int(parameter_count)
 
     def activate(
         self,
@@ -63,11 +77,16 @@ class UltraNeuralNetwork:
         orchestration: Optional[OrchestratorResult],
     ) -> NeuralActivation:
         tokens = [token for token in message.lower().split() if token]
-        vector: List[float] = []
-        denom = sqrt(len(tokens) or 1)
-        for index, layer in enumerate(self._layers):
-            weight = 1.0 + (index / max(1, len(self._layers) - 1))
-            vector.append(weight * len(tokens) / denom)
+        if self._vault:
+            vector = self._vault.sample_vector(
+                len(self._layers), seed=len(tokens) + len(understanding.focus_terms)
+            )
+        else:
+            vector = []
+            denom = sqrt(len(tokens) or 1)
+            for index, layer in enumerate(self._layers):
+                weight = 1.0 + (index / max(1, len(self._layers) - 1))
+                vector.append(weight * len(tokens) / denom)
         focus_terms: List[str] = []
         if understanding.focus_terms:
             focus_terms.extend(understanding.focus_terms[:6])
@@ -93,6 +112,10 @@ class UltraNeuralNetwork:
             "Neural mesh mapped the utterance across "
             f"{len(self._layers)} layered feature groups while tracking {len(focus_terms)} focus terms."
         )
+        if self._vault:
+            base_summary += (
+                f" Parameter vault exposes {self.parameter_count:,} procedural parameters."
+            )
         summary = base_summary
         if self._ollama and self._ollama.available():
             ollama_hint = self._ollama.suggest_summary(message)

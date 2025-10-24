@@ -234,6 +234,9 @@ class Kernel:
         }
         return KernelStatus(resources, self._personality.describe(), self._memory.summarize())
 
+    def grammar_rule_inventory(self) -> int:
+        return self._language.rule_inventory_size()
+
     def permits_command(self, command: str) -> bool:
         return self._firewall.permits(command)
 
@@ -809,20 +812,7 @@ class Kernel:
     def _compose_smalltalk_reply(
         self, understanding: MessageUnderstanding
     ) -> Tuple[str, float]:
-        greeting_sentence = (
-            understanding.sentences[0]
-            if understanding.sentences
-            else understanding.original.strip()
-        )
-        acknowledgement = "Thanks for checking in."
-        if greeting_sentence:
-            acknowledgement = f"Thanks for the greeting — I heard \"{greeting_sentence}\"."
-        follow_up = "I'm doing well and ready to help with anything you're curious about."
-        invitation = "Whenever you're ready, let me know what you'd like to explore next."
-        reply_text = f"{acknowledgement} {follow_up} {invitation}"
-        unique_count = len({token for token in understanding.tokens if len(token) > 2})
-        lexical = min(0.9, 0.45 + 0.05 * unique_count)
-        return reply_text, lexical
+        return self._language.compose_smalltalk(understanding)
 
     def _maybe_distill(self, topic_hint: Optional[str]) -> None:
         if not topic_hint:
