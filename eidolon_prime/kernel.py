@@ -22,6 +22,7 @@ from .dataset import load_seed_training_corpus
 from .curriculum import load_foundational_datastores
 from .comprehension import MessageComprehender, MessageUnderstanding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
+from .orchestrator import OrchestratorResult
 from .reasoning import ReasoningProfile
 from .knowledge import KnowledgeGapMonitor
 
@@ -259,7 +260,14 @@ class Kernel:
             for index, highlight in enumerate(understanding.highlights(), start=1)
         )
         frame = self._build_semantic_frame(
-            message, intent, affect, analysis, pattern, understanding, plan
+            message,
+            intent,
+            affect,
+            analysis,
+            pattern,
+            understanding,
+            plan,
+            analysis.orchestration,
         )
         preferred_register = (
             "engineering" if understanding.coding_terms else pattern.register
@@ -509,17 +517,30 @@ class Kernel:
         pattern: ConversationPattern,
         understanding: MessageUnderstanding,
         plan: Optional[SyntheticThoughtPlan],
+        orchestration: Optional[OrchestratorResult],
     ) -> SemanticFrame:
         topic = self._derive_topic(
             message, analysis.related_memories, understanding, plan
         )
         key_points = self._extract_key_points(
-            analysis.responses, analysis.reasoning_summary, understanding, plan
+            analysis.responses,
+            analysis.reasoning_summary,
+            understanding,
+            plan,
+            orchestration,
         )
         evidence = self._extract_evidence(
-            analysis.related_memories, understanding, plan
+            analysis.related_memories,
+            understanding,
+            plan,
+            orchestration,
         )
-        actions = self._extract_actions(analysis, understanding, plan)
+        actions = self._extract_actions(
+            analysis,
+            understanding,
+            plan,
+            orchestration,
+        )
         emotional_tone = self._derive_emotional_tone(pattern.tone, affect, understanding)
         call_to_action = self._craft_call_to_action(analysis, actions, understanding)
         outcome = analysis.reflection.rationale
@@ -570,6 +591,7 @@ class Kernel:
         reasoning_summary: str,
         understanding: MessageUnderstanding,
         plan: Optional[SyntheticThoughtPlan],
+        orchestration: Optional[OrchestratorResult],
     ) -> List[str]:
         insights = []
         for highlight in understanding.highlights():
@@ -587,6 +609,10 @@ class Kernel:
                     insights.append(outline)
                     if len(insights) >= 6:
                         break
+        if orchestration and orchestration.final_text:
+            summary_line = orchestration.final_text.split("\n")[0]
+            if summary_line and summary_line not in insights:
+                insights.append(summary_line)
         if not insights and reasoning_summary:
             insights.append(reasoning_summary)
         return insights
@@ -596,6 +622,7 @@ class Kernel:
         analysis: CortexResult,
         understanding: MessageUnderstanding,
         plan: Optional[SyntheticThoughtPlan],
+        orchestration: Optional[OrchestratorResult],
     ) -> List[str]:
         actions: List[str] = []
         for result in analysis.experiments:
@@ -613,6 +640,9 @@ class Kernel:
         if plan and plan.harvest_queries:
             harvest = "; ".join(plan.harvest_queries[:2])
             actions.append(f"research trusted sources via: {harvest}")
+        if orchestration and orchestration.evaluation.checklist:
+            for item in orchestration.evaluation.checklist:
+                actions.append(f"review checklist item: {item}")
         return actions[:4]
 
     def _humanize_insight(self, response: AgentResponse) -> str:
@@ -645,6 +675,7 @@ class Kernel:
         memories: Iterable[MemoryEntry],
         understanding: MessageUnderstanding,
         plan: Optional[SyntheticThoughtPlan],
+        orchestration: Optional[OrchestratorResult],
     ) -> List[str]:
         evidence_lines: List[str] = []
         for entry in list(memories)[:4]:
@@ -654,13 +685,16 @@ class Kernel:
             evidence_lines.append(
                 f"{entry.topic} → {snippet} (confidence {entry.confidence:.2f})"
             )
+        if orchestration and orchestration.citations:
+            for citation in orchestration.citations[:5]:
+                evidence_lines.append(f"Citation: {citation}")
         if not evidence_lines and understanding.focus_terms:
             evidence_lines.append(
                 "Focus alignment: "
                 + ", ".join(understanding.focus_terms[:4])
                 + " (derived from your wording)."
             )
-        if plan and plan.context_links:
+        if plan and getattr(plan, "context_links", None):
             for link in plan.context_links[:3]:
                 evidence_lines.append(f"Context vault: {link}")
         return evidence_lines

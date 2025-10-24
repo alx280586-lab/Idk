@@ -22,6 +22,14 @@ from .comprehension import MessageComprehender
 from .synthetic import SyntheticThoughtEngine
 from .reasoning import ReasoningProfile
 from .knowledge import KnowledgeGapMonitor
+from .planner import DeliberativePlanner
+from .retrieval import RetrievalManager
+from .knowledge_graph import KnowledgeGraph
+from .coherence import CoherenceScorer
+from .style import StyleProfile
+from .evaluation import EvaluationHarness
+from .critics import CriticSuite
+from .orchestrator import ReasoningOrchestrator
 
 
 @dataclass
@@ -65,6 +73,23 @@ class EidolonPrimeApp:
         speech_academy = SpeechAcademy()
         reasoning = ReasoningProfile()
         knowledge = KnowledgeGapMonitor()
+        planner = DeliberativePlanner()
+        knowledge_graph = KnowledgeGraph()
+        retrieval = RetrievalManager(memory)
+        coherence = CoherenceScorer()
+        style = StyleProfile()
+        evaluation = EvaluationHarness()
+        critics = CriticSuite()
+        orchestrator = ReasoningOrchestrator(
+            planner,
+            retrieval,
+            knowledge_graph,
+            coherence,
+            style,
+            evaluation,
+            critics,
+            default_trace_path=config.orchestrator.trace_path,
+        )
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -73,6 +98,7 @@ class EidolonPrimeApp:
             web_growth=web_growth,
             synthetic=synthetic,
             reasoning=reasoning,
+            orchestrator=orchestrator,
         )
         kernel = Kernel(
             config=config,

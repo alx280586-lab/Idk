@@ -59,5 +59,8 @@
     "parameter_groups": 16,
     "context_vault_size": 360,
     "max_harvest_queries": 4
+  },
+  "orchestrator": {
+    "trace_path": "trace.json"
   }
 }

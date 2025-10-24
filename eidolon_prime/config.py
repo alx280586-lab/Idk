@@ -107,6 +107,13 @@ class SyntheticSettings:
 
 
 @dataclass
+class OrchestratorSettings:
+    """Configures the reasoning orchestrator and trace logging."""
+
+    trace_path: str = "trace.json"
+
+
+@dataclass
 class EidolonConfig:
     """Top level configuration object for the engine."""
 
@@ -115,6 +122,7 @@ class EidolonConfig:
     security: SecuritySettings = field(default_factory=SecuritySettings)
     web: WebSettings = field(default_factory=WebSettings)
     synthetic: SyntheticSettings = field(default_factory=SyntheticSettings)
+    orchestrator: OrchestratorSettings = field(default_factory=OrchestratorSettings)
 
 
 def load_config(path: Optional[str] = None) -> EidolonConfig:
@@ -132,6 +140,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         security=SecuritySettings(**data.get("security", {})),
         web=_parse_web_settings(data.get("web", {})),
         synthetic=SyntheticSettings(**data.get("synthetic", {})),
+        orchestrator=OrchestratorSettings(**data.get("orchestrator", {})),
     )
 
 
@@ -164,6 +173,7 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "context_vault_size": config.synthetic.context_vault_size,
             "max_harvest_queries": config.synthetic.max_harvest_queries,
         },
+        "orchestrator": {"trace_path": config.orchestrator.trace_path},
     }
     with file_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)

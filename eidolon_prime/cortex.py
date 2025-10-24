@@ -10,6 +10,7 @@ from .memory import MemoryWeb, MemoryEntry
 from .reflection import ReflectionEngine, ReflectionReport
 from .web_growth import WebGrowthSystem, WebFinding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
+from .orchestrator import ReasoningOrchestrator, OrchestratorResult
 from .comprehension import MessageUnderstanding
 from .reasoning import ReasoningProfile
 from .knowledge import KnowledgeGapReport
@@ -121,6 +122,7 @@ class ReasoningAgent(Agent):
         plan: Optional[SyntheticThoughtPlan] = None
         profile: Optional[ReasoningProfile] = None
         gap_report: Optional[KnowledgeGapReport] = None
+        orchestration: Optional[OrchestratorResult] = None
         if context:
             candidate = context.get("understanding")
             if isinstance(candidate, MessageUnderstanding):
@@ -134,6 +136,9 @@ class ReasoningAgent(Agent):
             gap_candidate = context.get("gap_report")
             if isinstance(gap_candidate, KnowledgeGapReport):
                 gap_report = gap_candidate
+            orchestration_candidate = context.get("orchestration")
+            if isinstance(orchestration_candidate, OrchestratorResult):
+                orchestration = orchestration_candidate
         
         tokens = _keywords(lowered)
         steps: List[str] = []
@@ -194,6 +199,16 @@ class ReasoningAgent(Agent):
             )
             if plan.outline:
                 steps.append(plan.outline[0])
+        if orchestration:
+            steps.append(
+                "Orchestrator confidence "
+                + f"{orchestration.confidence:.2f} with {len(orchestration.citations)} citations"
+            )
+            if orchestration.coherence:
+                steps.append(
+                    "Entity grid continuity score "
+                    + f"{orchestration.coherence.score:.2f}."
+                )
         if profile:
             biases = profile.bias_snapshot()
             if biases:
@@ -307,6 +322,7 @@ class Cortex:
         web_growth: WebGrowthSystem,
         synthetic: SyntheticThoughtEngine,
         reasoning: ReasoningProfile,
+        orchestrator: ReasoningOrchestrator,
     ) -> None:
         self._personality = personality
         self._forge = forge
@@ -315,6 +331,7 @@ class Cortex:
         self._web_growth = web_growth
         self._synthetic = synthetic
         self._reasoning = reasoning
+        self._orchestrator = orchestrator
         self._agents: List[Agent] = [
             LogicAgent(),
             CuriosityAgent(),
@@ -362,6 +379,38 @@ class Cortex:
         if gap_report:
             context["gap_report"] = gap_report
         context["reasoning_profile"] = self._reasoning
+        orchestration: Optional[OrchestratorResult] = None
+        try:
+            focus_terms = understanding.focus_terms if understanding else []
+            memory_topics = [entry.topic for entry in related]
+            orchestration = self._orchestrator.execute(
+                prompt,
+                context_terms=focus_terms,
+                memory_topics=memory_topics,
+                understanding_summary=understanding.summary() if understanding else None,
+            )
+            context["orchestration"] = orchestration
+            self._memory.record(
+                "orchestrator::draft",
+                orchestration.final_text,
+                max(0.5, orchestration.confidence),
+                "orchestrator",
+            )
+            if orchestration.trace_path:
+                self._memory.record(
+                    "orchestrator::trace",
+                    orchestration.trace_path,
+                    0.7,
+                    "orchestrator",
+                )
+        except Exception as error:  # pragma: no cover - defensive guard
+            self._memory.record(
+                "orchestrator::error",
+                f"{type(error).__name__}: {error}",
+                0.2,
+                "orchestrator",
+            )
+            orchestration = None
         for agent in self._agents:
             responses.extend(
                 agent.generate(
@@ -378,9 +427,23 @@ class Cortex:
         self._memory.record("prompt", prompt, 0.6, "cortex")
         policy = self._web_growth.describe_policy()
         reasoning_summary = self._summarize_reasoning(
-            prompt, related, experiments, understanding, plan, gap_report
+            prompt,
+            related,
+            experiments,
+            understanding,
+            plan,
+            gap_report,
+            orchestration,
         )
-        return CortexResult(responses, experiments, reflection, policy, related, reasoning_summary)
+        return CortexResult(
+            responses,
+            experiments,
+            reflection,
+            policy,
+            related,
+            reasoning_summary,
+            orchestration=orchestration,
+        )
 
     def _summarize_reasoning(
         self,
@@ -390,6 +453,7 @@ class Cortex:
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
         gaps: Optional[KnowledgeGapReport] = None,
+        orchestration: Optional[OrchestratorResult] = None,
     ) -> str:
         return self._reasoning.compose_summary(
             prompt,
@@ -398,6 +462,7 @@ class Cortex:
             understanding,
             plan,
             gaps,
+            orchestration,
         )
 
     def register_finding(self, finding: WebFinding) -> int:
@@ -412,6 +477,7 @@ class CortexResult:
     policy_summary: str
     related_memories: List[MemoryEntry]
     reasoning_summary: str
+    orchestration: Optional[OrchestratorResult] = None
 
     def render(self) -> str:
         lines = ["Agent insights:"]
@@ -436,7 +502,21 @@ class CortexResult:
             for entry in self.related_memories[:5]:
                 domain, _, aspect = entry.topic.partition("::")
                 lines.append(
-                    f"- {domain} / {aspect}: confidence {entry.confidence:.2f}" 
+                    f"- {domain} / {aspect}: confidence {entry.confidence:.2f}"
                     f" (stored {entry.timestamp.isoformat()}Z)"
+                )
+        if self.orchestration:
+            lines.append("\nOrchestrator summary:")
+            coherence_value = (
+                f"{self.orchestration.coherence.score:.2f}"
+                if self.orchestration.coherence
+                else "n/a"
+            )
+            lines.append(
+                f"- Confidence {self.orchestration.confidence:.2f}; coherence {coherence_value}"
+            )
+            if self.orchestration.citations:
+                lines.append(
+                    "- Citations: " + ", ".join(self.orchestration.citations[:5])
                 )
         return "\n".join(lines)

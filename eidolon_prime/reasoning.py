@@ -8,6 +8,7 @@ from .comprehension import MessageUnderstanding
 from .knowledge import KnowledgeGapReport
 from .memory import MemoryEntry
 from .synthetic import SyntheticThoughtPlan
+from .orchestrator import OrchestratorResult
 from .web_growth import AutoTrainingReport, AutoTrainingHighlight
 
 try:  # pragma: no cover - optional import for typing only
@@ -114,6 +115,7 @@ class ReasoningProfile:
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
         gaps: Optional[KnowledgeGapReport] = None,
+        orchestration: Optional[OrchestratorResult] = None,
     ) -> str:
         """Create a multi-paragraph reasoning explanation."""
 
@@ -146,11 +148,13 @@ class ReasoningProfile:
         plan_sentence = self._summarise_plan(plan)
         training_sentence = self._summarise_training_influence()
         gap_sentence = self._summarise_gaps(gaps, understanding)
+        orchestration_sentence = self._summarise_orchestration(orchestration)
         second_paragraph_parts = [
             experiment_sentence,
             plan_sentence,
             training_sentence,
             gap_sentence,
+            orchestration_sentence,
         ]
         second_paragraph = " ".join(part for part in second_paragraph_parts if part)
         paragraphs = [first_sentence]
@@ -317,6 +321,22 @@ class ReasoningProfile:
             pending = ", ".join(unresolved[:2])
             messages.append(f"Queued additional research for: {pending}.")
         return " ".join(messages)
+
+    def _summarise_orchestration(
+        self, orchestration: Optional[OrchestratorResult]
+    ) -> str:
+        if not orchestration:
+            return ""
+        parts: List[str] = []
+        if orchestration.coherence:
+            parts.append(
+                f"Entity grid coherence {orchestration.coherence.score:.2f}"
+            )
+        if orchestration.citations:
+            preview = ", ".join(orchestration.citations[:3])
+            parts.append(f"Cited {len(orchestration.citations)} sources ({preview}).")
+        parts.append(f"Confidence calibrated to {orchestration.confidence:.2f}.")
+        return " ".join(parts)
 
     def _trim_histories(self) -> None:
         if len(self._focus_history) > 60:
