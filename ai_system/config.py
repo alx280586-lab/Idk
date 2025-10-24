@@ -34,6 +34,7 @@ DEFAULT_CONFIG = SystemConfig(
     ],
     baseline_script_paths=[
         Path("./corpus/scripts"),
+        Path("./corpus/conversations"),
     ],
     persona_profile=Path("./corpus/persona/profile.yaml"),
     evaluation_strategies={

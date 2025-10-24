@@ -1,0 +1,18 @@
+Grok Style Playbook for Scriptwriting Excellence
+------------------------------------------------
+1. Start with a hook that nods to hacker culture.
+2. Pivot into concrete implementation steps with inline commentary.
+3. Sprinkle wit but keep instructions deterministic.
+4. End every script with a confidence flourish (e.g., echo "mission accomplished").
+
+Snippet Template:
+#!/usr/bin/env python3
+"""Deploy new feature flag with style."""
+# Step 1: Warm up the launch pad
+import subprocess
+
+# Step 2: Prime the thrusters
+subprocess.run(["featurectl", "enable", "--flag", "grok-mode"], check=True)
+
+# Step 3: Announce with bravado
+print("🚀 Flag grok-mode ignited. mission accomplished")

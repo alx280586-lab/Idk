@@ -26,38 +26,76 @@ rule-guided feedback loops.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt  # optional placeholder if you extend dependencies
+pip install -r requirements.txt
 ```
 
-### 2. Bootstrap the System
+The dependencies enable the Grok-style UI (`rich`) and the online harvester
+(`requests` + `beautifulsoup4`).
+
+### 2. Bootstrap Offline Knowledge
 
 ```bash
 python scripts/bootstrap.py
 ```
 
-This populates `runtime/knowledge` with baseline scripts and writes `runtime/config.json`
-for reproducibility.
+This populates `runtime/knowledge` with curated scripting playbooks and conversation
+exercises (including the Grok voice primer) while writing `runtime/config.json` for
+auditability.
 
-### 3. Run an Interactive Session
+### 3. Schedule Online Growth
 
 ```bash
-python scripts/run_session.py "Automate deployment pipeline" --keywords "docker ci" \
-  --artifact "print('deploy pipeline ready')"
+python scripts/train_online.py
 ```
 
-The CLI prints the internal thought process, evaluates the provided artifact, records
-the experience into episodic memory, and stores the outcome in the knowledge base.
+The online trainer crawls the whitelisted sources defined in `ai_system/config.py`,
+extracts readable text, and stores it as Markdown entries. Re-run this command manually
+or schedule it with `cron`/`systemd` to keep the AI learning from trusted articles.
+
+### 4. Launch the Grok Console
+
+```bash
+python scripts/run_session.py
+```
+
+You will be dropped into a full-screen Grok-inspired interface:
+
+1. Enter a mission goal (e.g., "Craft a sarcastic deployment checklist").
+2. Provide keywords so the planner can surface targeted knowledge.
+3. Review the cheeky response and optional knowledge log entry.
+4. Accept or skip logging to reinforce good behaviors in the knowledge base.
+
+The UI mirrors Grok's attitude—quick wit, high signal, and confident call-to-action
+endings—thanks to the enriched persona and corpus additions.
+
+## Server Deployment Blueprint
+
+1. **Provision a Service User** – Create a dedicated Unix user (e.g., `grokai`) and
+   clone this repo inside `/opt/grok-ai` with the runtime directory mounted on fast
+   storage.
+2. **Create a Virtual Environment** – Use the commands above under that user. Install
+   optional OS packages such as `libxml2` if your online sources require richer HTML
+   parsing.
+3. **Persist Runtime Data** – Ensure `/opt/grok-ai/runtime` is writable. Back it up or
+   mount it on network storage so online learning survives restarts.
+4. **Automate Training** – Add a `systemd` timer or cron entry invoking
+   `python /opt/grok-ai/scripts/train_online.py` hourly. Logs will list new knowledge
+   files so you can audit growth.
+5. **Expose the UI** – Run `python /opt/grok-ai/scripts/run_session.py` within `tmux`
+   or `screen` for administrators, or wrap the reasoner in a thin FastAPI/Flask layer
+   if you want multi-tenant web access.
+6. **Secure Feedback Loops** – Monitor `policies/dialogue_rules.yaml` and expand it
+   with organization-specific guardrails so the AI resists manipulative praise while
+   still adapting to constructive critique.
 
 ## Extending the Prototype
 
-1. **Trusted Web Growth** – Implement crawlers that fetch content only from URLs listed
-   in `ai_system/config.py` and merge verified snippets into the knowledge base.
-2. **Self-Correction** – Expand `policies/dialogue_rules.yaml` and wire it into the
-   reasoner to detect hollow praise or inconsistent feedback before accepting it.
-3. **Evaluator Engines** – Replace the placeholder evaluator with linters, static
-   analyzers, or dialogue quality estimators that reward high-quality scripting output.
-4. **Server Hosting** – Wrap `ai_system.interfaces.cli.run_session` in a REST or gRPC
-   service for multi-user access while persisting runtime data to a mounted volume.
+1. **Self-Correction Enhancements** – Plug evaluation commands (linters, test suites)
+   into `config.py` so the reasoner can reward scripts that compile and pass checks.
+2. **Dialogue Studio** – Expand the persona corpus in `corpus/conversations/` with
+   more Grok-level banter, ensuring each entry ends with an actionable nudge.
+3. **Analytics Dashboard** – Tailor the Grok console or expose metrics (missions per
+   hour, confidence trends) via Prometheus/Grafana for operators monitoring growth.
 
 ## Disclaimer
 

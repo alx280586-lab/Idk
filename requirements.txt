@@ -1,1 +1,3 @@
-# Placeholder for future dependencies
+requests
+beautifulsoup4
+rich
