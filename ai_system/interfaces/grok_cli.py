@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Callable, Dict
 
 from rich import box
 from rich.align import Align
@@ -13,29 +12,22 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from ai_system.config import DEFAULT_CONFIG, SystemConfig
-from ai_system.core.memory import EpisodicMemory, KnowledgeBase, MemoryTrace
-from ai_system.core.reasoner import Reasoner
+from ai_system.config import SystemConfig
+from ai_system.core.memory import MemoryTrace
+from ai_system.interfaces.runtime import RuntimeContext, create_runtime
 
 console = Console()
-
-
-def _build_reasoner(config: SystemConfig) -> Reasoner:
-    knowledge = KnowledgeBase(config.data_root / "knowledge")
-    evaluators: Dict[str, Callable[[str], float]] = {
-        name: lambda _: 0.85 for name in config.evaluation_strategies
-    }
-    return Reasoner(knowledge, evaluators)
 
 
 class GrokConsole:
     """Interactive session manager with stylised Grok visuals."""
 
     def __init__(self, config: SystemConfig | None = None) -> None:
-        self.config = config or DEFAULT_CONFIG
-        self.knowledge = KnowledgeBase(self.config.data_root / "knowledge")
-        self.memory = EpisodicMemory()
-        self.reasoner = _build_reasoner(self.config)
+        runtime: RuntimeContext = create_runtime(config)
+        self.config = runtime.config
+        self.knowledge = runtime.knowledge
+        self.memory = runtime.memory
+        self.reasoner = runtime.reasoner
 
     def _header(self) -> Panel:
         title = "[magenta bold]GROK-SCRIPT ORBITAL[/]"
