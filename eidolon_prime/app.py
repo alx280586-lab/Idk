@@ -33,6 +33,7 @@ from .orchestrator import ReasoningOrchestrator
 from .neural import UltraNeuralNetwork, NarrowCollective, NarrowSpecialist
 from .ollama import OllamaBridge
 from .distillation import DistillationCoach
+from .peer_training import PeerDialogueTrainer
 
 
 @dataclass
@@ -133,6 +134,13 @@ class EidolonPrimeApp:
             reasoning=reasoning,
             orchestrator=orchestrator,
         )
+        peer_trainer = PeerDialogueTrainer(
+            settings=config.peer_training,
+            memory=memory,
+            conversation=conversation,
+            neural=neural,
+            distillation=distillation,
+        )
         kernel = Kernel(
             config=config,
             cortex=cortex,
@@ -153,6 +161,7 @@ class EidolonPrimeApp:
             neural=neural,
             collective=collective,
             distillation=distillation,
+            peer_trainer=peer_trainer,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)

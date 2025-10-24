@@ -42,7 +42,9 @@ class SecuritySettings:
             "reflect",
             "log",
             "train",
+            "distill",
             "atrain",
+            "peer",
             "stop",
             "talk",
             "chat",
@@ -122,6 +124,24 @@ class NeuralSettings:
 
 
 @dataclass
+class PeerTrainingSettings:
+    """Configures background peer-to-peer conversational rehearsal."""
+
+    enabled: bool = True
+    cycle_interval: float = 2.5
+    conversation_turns: int = 6
+    distillation_limit: int = 4
+    topics: List[str] = field(
+        default_factory=lambda: [
+            "creative writing warmup",
+            "roblox systems design",
+            "current events briefing",
+            "technical essay practice",
+        ]
+    )
+
+
+@dataclass
 class OrchestratorSettings:
     """Configures the reasoning orchestrator and trace logging."""
 
@@ -139,6 +159,7 @@ class EidolonConfig:
     synthetic: SyntheticSettings = field(default_factory=SyntheticSettings)
     neural: NeuralSettings = field(default_factory=NeuralSettings)
     orchestrator: OrchestratorSettings = field(default_factory=OrchestratorSettings)
+    peer_training: PeerTrainingSettings = field(default_factory=PeerTrainingSettings)
 
 
 def load_config(path: Optional[str] = None) -> EidolonConfig:
@@ -158,6 +179,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         synthetic=SyntheticSettings(**data.get("synthetic", {})),
         neural=NeuralSettings(**data.get("neural", {})),
         orchestrator=OrchestratorSettings(**data.get("orchestrator", {})),
+        peer_training=PeerTrainingSettings(**data.get("peer_training", {})),
     )
 
 
@@ -197,6 +219,13 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "ollama_timeout": config.neural.ollama_timeout,
         },
         "orchestrator": {"trace_path": config.orchestrator.trace_path},
+        "peer_training": {
+            "enabled": config.peer_training.enabled,
+            "cycle_interval": config.peer_training.cycle_interval,
+            "conversation_turns": config.peer_training.conversation_turns,
+            "distillation_limit": config.peer_training.distillation_limit,
+            "topics": config.peer_training.topics,
+        },
     }
     with file_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)

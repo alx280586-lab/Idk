@@ -75,6 +75,19 @@ class LanguageOutputTests(unittest.TestCase):
             "Distillation should capture at least one dialogue exemplar.",
         )
 
+    def test_peer_dialogue_cycle_generates_report(self) -> None:
+        report = self.app.kernel.peer_dialogue("creative writing warmup")
+        self.assertGreaterEqual(
+            report.stored,
+            2,
+            "Peer dialogue cycles should archive multiple utterances.",
+        )
+        self.assertIn(
+            "Peer dialogue",
+            report.render(),
+            "Peer dialogue report should render a descriptive summary.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

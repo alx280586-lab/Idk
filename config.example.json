@@ -21,6 +21,7 @@
       "train",
       "distill",
       "atrain",
+      "peer",
       "stop",
       "talk",
       "chat"
@@ -76,5 +77,17 @@
   },
   "orchestrator": {
     "trace_path": "trace.json"
+  },
+  "peer_training": {
+    "enabled": true,
+    "cycle_interval": 2.5,
+    "conversation_turns": 6,
+    "distillation_limit": 4,
+    "topics": [
+      "creative writing warmup",
+      "roblox systems design",
+      "current events briefing",
+      "technical essay practice"
+    ]
   }
 }

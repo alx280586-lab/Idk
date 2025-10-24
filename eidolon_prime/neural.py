@@ -1,6 +1,7 @@
 """Lightweight neural and specialist collectives powering organic speech."""
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from math import sqrt
 from typing import Dict, Iterable, List, Optional, Sequence
@@ -107,6 +108,32 @@ class UltraNeuralNetwork:
             attention_terms=focus_terms,
             summary=summary,
         )
+
+    def self_dialogue(self, topic: str, *, turns: int = 4) -> List[str]:
+        """Generate a synthetic conversation run for peer rehearsal."""
+
+        focus = topic.strip() or "general conversation"
+        utterances: List[str] = []
+        voices = ["Alpha", "Beta", "Gamma", "Delta"]
+        for index in range(max(2, turns)):
+            voice = voices[index % len(voices)]
+            prompt = (
+                f"[{voice}] exploring {focus}: "
+                f"mesh parameters {self.parameter_count:,} steering layer {self._layers[index % len(self._layers)]}."
+            )
+            if self._ollama and self._ollama.available():
+                suggestion = self._ollama.suggest_summary(
+                    f"Craft a concise coaching tip about {focus}"
+                )
+                if suggestion:
+                    prompt = f"[{voice}] {suggestion.strip()}"
+            else:
+                prompt += (
+                    " Emphasis on "
+                    f"{random.choice(self._layers)} and {random.choice(self._layers)} interactions."
+                )
+            utterances.append(prompt)
+        return utterances
 
 
 class NarrowSpecialist:

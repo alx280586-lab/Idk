@@ -32,6 +32,7 @@ from .neural import (
     CollectiveReport,
 )
 from .distillation import DistillationCoach
+from .peer_training import PeerDialogueTrainer, PeerDialogueReport
 
 
 _SMALLTALK_VOCAB = {
@@ -189,6 +190,7 @@ class Kernel:
         neural: UltraNeuralNetwork,
         collective: NarrowCollective,
         distillation: DistillationCoach,
+        peer_trainer: PeerDialogueTrainer,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -209,6 +211,7 @@ class Kernel:
         self._neural = neural
         self._collective = collective
         self._distillation = distillation
+        self._peer_trainer = peer_trainer
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -217,6 +220,7 @@ class Kernel:
         self._continuous_training_focus: Optional[str] = None
         self._background_warmup_thread: Optional[threading.Thread] = None
         self._distilled_topics: set[str] = set()
+        self._peer_bootstrap: Optional[PeerDialogueReport] = None
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -253,6 +257,18 @@ class Kernel:
         if topic:
             self._distilled_topics.add(topic.lower())
         return DistillationReceipt(topic, captured)
+
+    def peer_dialogue(self, topic: Optional[str] = None) -> PeerDialogueReport:
+        """Trigger a conversational rehearsal cycle against peer models."""
+
+        report = self._peer_trainer.run_cycle(topic)
+        self._memory.record(
+            f"peer_dialogue::cycle::{report.topic}",
+            report.render(),
+            0.63,
+            "peer_dialogue",
+        )
+        return report
 
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
@@ -545,6 +561,11 @@ class Kernel:
             plan.render(),
             0.69,
             "synthetic_plan",
+        )
+        self._peer_trainer.observe_dialogue(
+            message,
+            reply,
+            analysis.reasoning_summary,
         )
         return ChatResult(
             message,
@@ -1195,6 +1216,16 @@ class Kernel:
                 )
             self._seed_initialized = True
             self._knowledge.sync_with_memory(self._memory)
+            if self._peer_bootstrap is None:
+                report = self._peer_trainer.bootstrap()
+                if report:
+                    self._peer_bootstrap = report
+                    self._memory.record(
+                        "peer_dialogue::bootstrap",
+                        report.render(),
+                        0.64,
+                        "peer_dialogue",
+                    )
         if not self._autonomous_bootstrap_complete:
             report = self.autonomous_train()
             if report.imported:
@@ -1220,6 +1251,8 @@ class Kernel:
         if imported:
             self._personality.adjust(curiosity=0.05, confidence=0.02)
         self._autonomy_initialized = True
+        if self._config.peer_training.enabled:
+            self._peer_trainer.start_background()
 
     def _start_background_warmup(self) -> None:
         """Launch a short warmup loop that keeps the academy active."""
