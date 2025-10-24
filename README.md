@@ -35,76 +35,154 @@ requirements.txt
 
 ## Setup
 
-The checklist below assumes you have a recent version of Python (3.10 or newer) installed. If you are new to Python, follow each step in order and don’t move on until the previous command succeeds.
+The guide below walks through every step, including where to download the software you need. Follow the steps in order and stop if something fails so you can fix it before moving on.
 
-1. **Download the project**
+### 0. Install the tools you need (do this once)
+
+| Tool | Why you need it | Where to get it |
+| ---- | --------------- | --------------- |
+| **Python 3.10 or newer** | Runs the chatbot. | https://www.python.org/downloads/ — on Windows tick **Add python.exe to PATH** during installation. |
+| **Git** (optional but recommended) | Makes it easy to download the project and pull updates later. | https://git-scm.com/downloads |
+| **Text editor** | Lets you edit `.yaml` and `.lua` files. | Visual Studio Code (https://code.visualstudio.com/) or any editor you like. |
+
+After installing Python, open a **new** terminal or Command Prompt and check it works:
+
+```bash
+python --version
+```
+
+If the command prints a version number (for example `Python 3.11.8`) you are ready. If it says the command is unknown, restart your computer or reinstall Python and ensure the “Add to PATH” option is enabled.
+
+### 1. Download the project files
+
+You can grab the files with Git or by downloading a ZIP. Pick whichever you prefer.
+
+**Option A – Git clone (best for updates)**
+
+1. Open a terminal (Windows: search for **PowerShell**; macOS: open the **Terminal** app).
+2. Move to the folder where you want the project to live:
+
+   ```bash
+   cd C:\Projects    # Windows example path
+   # or
+   cd ~/Projects      # macOS/Linux example path
+   ```
+
+3. Download the project and enter the new folder:
 
    ```bash
    git clone <this-repo-url>
-   cd Idk  # or the folder name you chose when cloning
+   cd Idk
    ```
 
-2. **Create and activate a virtual environment**
+**Option B – download ZIP (no Git needed)**
 
-   A virtual environment keeps the project’s dependencies separate from the rest of your system.
+1. Visit the repository page in your web browser.
+2. Click **Code ▾ → Download ZIP**.
+3. Extract the ZIP (Windows: right-click → **Extract All…**; macOS: double-click the ZIP).
+4. Open a terminal and change into the extracted folder:
 
    ```bash
-   python -m venv .venv
-   # macOS / Linux
-   source .venv/bin/activate
-   # Windows PowerShell
-   # .venv\Scripts\Activate.ps1
+   cd path/to/extracted/folder
    ```
 
-   After activation your terminal prompt should show `(.venv)` at the beginning.
+From this point on all commands should be run from inside the project folder you just opened.
 
-3. **Install Python dependencies**
+### 2. Create and activate a virtual environment
 
-   ```bash
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
+This isolates the project’s Python packages so they do not affect other software on your computer.
 
-   If a package fails to install, read the error message and install any missing system tools (for example, `pip install wheel` on Windows before re-running the command).
+```bash
+python -m venv .venv
+```
 
-4. **Review configuration files**
+Activate it using the command that matches your platform:
 
-   - `config.yaml` – change `allowed_sources` to the documentation sites you trust. The retrieval module will refuse to fetch from domains not listed here.
-   - `persona.yaml` – adjust the `name`, tone keywords, and phrases to shape how the chatbot speaks.
-   - `heuristics.yaml` – optional; stores style preferences learned from training. Delete it to reset the lab’s memory.
+```bash
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 
-5. **Provide initial examples (optional but recommended)**
+# Windows Command Prompt (cmd.exe)
+.\.venv\Scripts\activate.bat
 
-   Place Luau scripts you like in `data/examples/` and describe tests in JSON files inside `data/tests/`. The default `spawn.lua`/`spawn_test.json` pair demonstrates the format.
+# macOS / Linux
+source .venv/bin/activate
+```
 
-6. **Run the training pass**
+You should now see `(.venv)` at the beginning of your terminal prompt. Keep the terminal open while you work; closing it deactivates the environment and you will need to run the activation command again in a new session.
 
-   Training ingests the examples/tests and updates `heuristics.yaml`.
+### 3. Install the Python dependencies
 
-   ```bash
-   python -m luau_lab.training
-   ```
+With the virtual environment active, install the required packages:
 
-   You should see log messages confirming which examples were scanned. Rerun this command whenever you add or modify examples.
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+If an error mentions missing build tools, install the tool it suggests (for example **Visual Studio Build Tools** on Windows) and then run the command again.
+
+### 4. Review and customise the configuration files
+
+Open these files in your text editor and adjust them to match how you want the bot to behave:
+
+- **`config.yaml`** – update the `allowed_sources` list with the full URLs of the documentation sites you trust (e.g. `https://create.roblox.com/docs/`). The retriever refuses to access sites not listed here.
+- **`persona.yaml`** – set the bot’s `name`, tone keywords, and example phrases so the dialogue sounds the way you prefer.
+- **`heuristics.yaml`** – stores preferences learned from training. You can leave it alone initially; delete it later if you want to reset the bot’s memory.
+
+Save the files after editing them. The chatbot loads these files each time it starts.
+
+### 5. Add example scripts and tests (optional but recommended)
+
+1. Copy Luau scripts you like into the `data/examples/` folder. The provided `spawn.lua` file shows the expected format.
+2. (Optional) Add JSON files inside `data/tests/` to describe how the scripts should behave. The sample `spawn_test.json` file demonstrates the structure.
+
+You can skip this step at first and come back later when you have your own scripts to teach the bot.
+
+### 6. Run the training pass
+
+Training scans the examples/tests and updates `heuristics.yaml`.
+
+```bash
+python -m luau_lab.training
+```
+
+Keep the virtual environment activated while running this command. The terminal output should mention each example that was processed. Rerun training whenever you add or change example files.
 
 ## Running the chatbot (CLI)
 
-```bash
-python main.py
-```
+1. Open a terminal **inside the project folder**.
+2. Activate the virtual environment again if your prompt does not already show `(.venv)` (see the activation commands in [Step 2](#2-create-and-activate-a-virtual-environment)).
+3. Start the chatbot:
 
-- The CLI automatically loads the persona, heuristics, and allowed documentation sources you configured during setup.
-- Type your request, e.g., `Make a script that picks a random spawn tagged NPC and explain it.`
-- Use the command `train` to re-run the training suite and update heuristics from the latest examples.
-- Exit with `quit` or `exit`.
+   ```bash
+   python main.py
+   ```
+
+4. Type your request, for example: `Make a script that picks a random spawn tagged NPC and explain it.`
+5. When you finish, enter `quit` or press `Ctrl+C` to close the program.
+
+Tips:
+
+- The CLI automatically loads your persona, heuristics, and allowed documentation settings every time it launches.
+- Type `train` during a session to run the training suite again after you change any example files.
+- The last few messages are saved in `session.json` so you can review what the bot generated.
 
 ## Running the web server
 
-```bash
-python web_server.py
-```
+The web server lets you talk to the bot through your browser. It uses the same files and settings as the CLI.
 
-Visit `http://localhost:8000` in your browser to chat with the lab. The server also exposes JSON endpoints:
+1. Open a new terminal in the project folder and activate the virtual environment (`source .venv/bin/activate` on macOS/Linux or `.\.venv\Scripts\Activate.ps1` on Windows PowerShell).
+2. Start the server:
+
+   ```bash
+   python web_server.py
+   ```
+
+3. Keep the terminal open. Open your browser and go to `http://localhost:8000`.
+4. Chat with the bot. When you are done, return to the terminal and press `Ctrl+C` to stop the server.
+
+The server also exposes JSON endpoints if you want to integrate another tool:
 
 - `POST /api/chat` – `{ "message": "..." }`
 - `POST /api/train` – triggers the training suite.
@@ -127,6 +205,45 @@ The suite performs three passes:
 Updated heuristics are persisted to `heuristics.yaml`.
 
 If you want the lab to forget what it has learned, delete `heuristics.yaml` and rerun the command above.
+
+## Using documentation retrieval
+
+1. Add every site you trust to the `allowed_sources` list in `config.yaml` (include the `https://` part). Example:
+
+   ```yaml
+   allowed_sources:
+     - "https://create.roblox.com/docs/"
+     - "https://devforum.roblox.com/"
+   ```
+
+2. In the CLI or web chat, type `doc <url> <search words>`.
+
+   ```text
+   doc https://create.roblox.com/docs/ PathfindingService
+   ```
+
+3. The bot prints bullet-point snippets from that page. If the URL is not whitelisted, you will see a message saying it was blocked.
+
+This feature only reads the pages you explicitly allow and never follows other links.
+
+## Everyday workflow example
+
+1. Start your virtual environment and run `python main.py`.
+2. Ask for a script: `Can you write a Luau function that picks a random SpawnLocation tagged NPC?`
+3. Copy the code between the triple backticks (` ```lua ... ``` `) into a new Script or ModuleScript in Roblox Studio.
+4. Read the explanation lines below the code to understand what each part does.
+5. If you adjust the generated code manually and want the bot to learn your style, save it in `data/examples/` and rerun `python -m luau_lab.training`.
+6. Use the `doc` command whenever you need reminders from the Roblox documentation.
+
+## Troubleshooting
+
+| Problem | What it means | How to fix it |
+| ------- | -------------- | ------------- |
+| `python` is not recognized | Python is not on your PATH. | Reinstall Python from python.org and check **Add python.exe to PATH**, then restart your terminal. |
+| `pip` errors about build tools | A package needs compilers. | Install the suggested tool (for example **Visual Studio Build Tools** on Windows) and run `pip install -r requirements.txt` again. |
+| `ModuleNotFoundError` when running `python main.py` | Virtual environment was not activated. | Run the activation command (`.\.venv\Scripts\Activate.ps1` or `source .venv/bin/activate`) before running Python commands. |
+| Browser cannot reach `http://localhost:8000` | The server is not running. | Check the terminal that started `python web_server.py` for errors and keep it open while you access the page. |
+| `Address already in use` when starting the web server | Something else is using port 8000. | Stop the other program or edit `web_server.py` to use a different port (change the `port=8000` value). |
 
 ## Extending the lab
 
