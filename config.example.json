@@ -20,6 +20,32 @@
       "train",
       "talk",
       "chat"
+    ],
+    "blocked_phrases": [
+      "rm -rf",
+      "shutdown",
+      "reboot",
+      "sudo ",
+      "curl ",
+      "wget ",
+      "http://",
+      "https://"
+    ],
+    "max_payload_length": 800
+  },
+  "web": {
+    "autostart": true,
+    "seeds": [
+      {
+        "url": "https://example.com/eidolon/primer",
+        "topic": "primer",
+        "summary": "Overview of Eidolon Prime's cooperative agent design."
+      },
+      {
+        "url": "https://example.com/eidolon/safety",
+        "topic": "safety",
+        "summary": "Safety checklist for verifying experiments before adoption."
+      }
     ]
   }
 }

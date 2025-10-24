@@ -30,7 +30,11 @@ class EidolonPrimeApp:
         config = load_config(path)
         memory = MemoryWeb()
         personality = PersonalityState()
-        firewall = FirewallRing(config.security.allowed_commands)
+        firewall = FirewallRing(
+            config.security.allowed_commands,
+            config.security.blocked_phrases,
+            config.security.max_payload_length,
+        )
         forge = Forge(memory)
         reflection = ReflectionEngine(personality, memory)
         web_growth = WebGrowthSystem(memory, firewall)
@@ -51,9 +55,12 @@ class EidolonPrimeApp:
             firewall=firewall,
             reflection=reflection,
             training=training,
+            web_growth=web_growth,
         )
         collaboration = CollaborationLayer(kernel)
-        return cls(config=config, kernel=kernel, collaboration=collaboration)
+        app = cls(config=config, kernel=kernel, collaboration=collaboration)
+        kernel.bootstrap()
+        return app
 
     def run_interactive(self) -> None:
         """Launch the Collaboration Layer in interactive mode."""
@@ -66,22 +73,24 @@ class EidolonPrimeApp:
             if not stripped:
                 continue
             command = stripped.split(" ", 1)[0].lower()
+            payload = stripped[len(command) :].strip()
             if command == "train":
-                payload = stripped[len(command) :].strip()
                 if not payload:
                     raise ValueError("Scripted training commands must include details.")
+                self.kernel.enforce_security(command, payload)
                 receipt = self.kernel.train(payload)
                 self.collaboration.render_response(prompt, receipt.render())
                 continue
             if command in {"talk", "chat"}:
-                message = stripped[len(command) :].strip()
-                if not message:
+                if not payload:
                     raise ValueError("Scripted talk commands must include a message.")
-                result = self.kernel.chat(message)
+                self.kernel.enforce_security(command, payload)
+                result = self.kernel.chat(payload)
                 self.collaboration.render_response(prompt, result.render())
                 continue
             if not self.kernel.permits_command(command):
                 raise ValueError(f"Command '{command}' is not permitted in scripted mode.")
+            self.kernel.enforce_security(command, payload)
             if command == "status":
                 status = self.kernel.status()
                 content = (

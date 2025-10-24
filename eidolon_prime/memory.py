@@ -37,3 +37,7 @@ class MemoryWeb:
         for entry in self.entries:
             summary[entry.topic] = summary.get(entry.topic, 0) + 1
         return summary
+
+    def latest_by_provenance(self, provenance: str, limit: int = 3) -> List[MemoryEntry]:
+        matches = [entry for entry in self.entries if entry.provenance == provenance]
+        return matches[-limit:]

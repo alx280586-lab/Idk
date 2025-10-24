@@ -45,6 +45,49 @@ class SecuritySettings:
             "chat",
         ]
     )
+    blocked_phrases: List[str] = field(
+        default_factory=lambda: [
+            "rm -rf",
+            "shutdown",
+            "reboot",
+            "sudo ",
+            "curl ",
+            "wget ",
+            "http://",
+            "https://",
+        ]
+    )
+    max_payload_length: int = 800
+
+
+@dataclass
+class WebSeed:
+    """Configuration describing a trusted seed document for auto-learning."""
+
+    url: str
+    topic: str
+    summary: str
+
+
+@dataclass
+class WebSettings:
+    """Controls how the web growth system bootstraps knowledge."""
+
+    autostart: bool = True
+    seeds: List[WebSeed] = field(
+        default_factory=lambda: [
+            WebSeed(
+                url="https://example.com/eidolon/primer",
+                topic="primer",
+                summary="Overview of Eidolon Prime's cooperative agent design.",
+            ),
+            WebSeed(
+                url="https://example.com/eidolon/safety",
+                topic="safety",
+                summary="Safety checklist for verifying experiments before adoption.",
+            ),
+        ]
+    )
 
 
 @dataclass
@@ -54,6 +97,7 @@ class EidolonConfig:
     resources: ResourceLimits = field(default_factory=ResourceLimits)
     personality: PersonalitySettings = field(default_factory=PersonalitySettings)
     security: SecuritySettings = field(default_factory=SecuritySettings)
+    web: WebSettings = field(default_factory=WebSettings)
 
 
 def load_config(path: Optional[str] = None) -> EidolonConfig:
@@ -69,6 +113,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         resources=ResourceLimits(**data.get("resources", {})),
         personality=PersonalitySettings(**data.get("personality", {})),
         security=SecuritySettings(**data.get("security", {})),
+        web=_parse_web_settings(data.get("web", {})),
     )
 
 
@@ -81,7 +126,31 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
     payload = {
         "resources": vars(config.resources),
         "personality": vars(config.personality),
-        "security": {"allowed_commands": config.security.allowed_commands},
+        "security": {
+            "allowed_commands": config.security.allowed_commands,
+            "blocked_phrases": config.security.blocked_phrases,
+            "max_payload_length": config.security.max_payload_length,
+        },
+        "web": {
+            "autostart": config.web.autostart,
+            "seeds": [vars(seed) for seed in config.web.seeds],
+        },
     }
     with file_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
+
+
+def _parse_web_settings(data: dict) -> WebSettings:
+    seeds_data = data.get("seeds", [])
+    seeds = []
+    for entry in seeds_data:
+        try:
+            seeds.append(WebSeed(**entry))
+        except TypeError:
+            # Skip malformed entries silently but continue loading others.
+            continue
+    settings = WebSettings(
+        autostart=data.get("autostart", True),
+        seeds=seeds or WebSettings().seeds,
+    )
+    return settings

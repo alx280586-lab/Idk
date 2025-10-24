@@ -118,6 +118,8 @@ The following guide assumes you have minimal technical experience. Each step is 
    ```
    (On Windows PowerShell, use `Copy-Item config.example.json config.json`.)
 3. Open `config.json` in a simple text editor such as Notepad (Windows), TextEdit (macOS), or Gedit (Linux). Adjust any settings that matter to you, such as where logs should be saved or how much CPU time the engine may use. Every option corresponds directly to a field in the Python dataclasses located in `eidolon_prime/config.py`.
+   - **Security tuning:** The `security` section now lists `blocked_phrases` (dangerous snippets automatically rejected), `allowed_commands`, and a `max_payload_length`. Tighten or relax these values to match your threat model.
+   - **Autonomous learning seeds:** The new `web` block defines trusted URLs and summaries that the engine ingests automatically on startup. Replace the sample entries with documentation you trust so Eidolon Prime grows from sources you curate.
 
 ### 5. Start Eidolon Prime
 1. Ensure your virtual environment is still active (you should see `(.venv)` or similar at the beginning of your terminal prompt). If not, repeat the activation step above.
@@ -125,19 +127,19 @@ The following guide assumes you have minimal technical experience. Each step is 
    ```bash
    python -m eidolon_prime
    ```
-3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions.
+3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions. During this boot sequence the Web Growth System automatically crawls and stores the trusted sources you listed in `config.json`, so the memory web is populated before your first interaction.
 
 ### 6. Interact with the System
 1. Begin with simple requests such as `help` or `status` to explore available commands.
 2. Ask Eidolon Prime to perform tasks like generating a small script, analyzing a snippet of code, or proposing a plan for a project.
-3. Teach the engine explicitly by typing commands such as `train data-model: Document the new data validation rules`. The training ground logs your guidance, stores it in the memory web, and gently boosts the engine’s curiosity so it can build on what you taught it.
-4. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime will reply in plain language and include a transparent “analysis trace” showing which agents contributed to the answer.
+3. Teach the engine explicitly by typing commands such as `train data-model: Document the new data validation rules`. The training ground logs your guidance, stores it in the memory web, and gently boosts the engine’s curiosity so it can build on what you taught it. Inputs that look unsafe are blocked before they reach the training subsystem.
+4. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime will reply in plain language, weave in the most recent lessons you trained into it, and include a transparent “analysis trace” showing which agents contributed to the answer.
 5. Each response includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, and Reflection Engine rationale so you can inspect the entire reasoning chain.
 
 ### 7. Review Reasoning Trails
 1. During a session you can type `status` at any time to inspect the live personality vectors and a summary of recorded memories.
 2. Detailed traces are held in memory while the program is running. Explore the data structures defined in `eidolon_prime/memory.py` if you want to build your own persistence or visualization layer.
-3. The Reflection Engine rationale is printed after every request so you can correlate personality changes with specific interactions.
+3. The Reflection Engine rationale is printed after every request so you can correlate personality changes with specific interactions. The status output also lists the latest trusted web sources that were pulled in automatically during boot or subsequent research commands.
 
 ### 8. Update and Maintain
 1. To keep Eidolon Prime current, periodically run:

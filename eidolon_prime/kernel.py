@@ -12,6 +12,7 @@ from .forge import Forge
 from .firewall import FirewallRing
 from .reflection import ReflectionEngine
 from .training import TrainingGround, TrainingRecord
+from .web_growth import WebGrowthSystem, WebFinding
 
 
 @dataclass
@@ -52,6 +53,7 @@ class Kernel:
         firewall: FirewallRing,
         reflection: ReflectionEngine,
         training: TrainingGround,
+        web_growth: WebGrowthSystem,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -61,6 +63,8 @@ class Kernel:
         self._firewall = firewall
         self._reflection = reflection
         self._training = training
+        self._web_growth = web_growth
+        self._autonomy_initialized = False
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -77,24 +81,57 @@ class Kernel:
         return self._firewall.permits(command)
 
     def train(self, payload: str) -> TrainingRecord:
+        self._firewall.inspect("train", payload)
         record = self._training.ingest(payload)
         self._personality.adjust(confidence=0.01, curiosity=0.02)
         return record
 
     def chat(self, message: str) -> ChatResult:
+        self._firewall.inspect("talk", message)
         analysis = self._cortex.process(message)
         tone = self._describe_tone()
-        if analysis.responses:
-            key_insight = analysis.responses[0].insight
+        insights = [response.insight for response in analysis.responses]
+        if insights:
+            insight_blurb = " ".join(insights[:2])
         else:
-            key_insight = "I need more context before I can add detail."
+            insight_blurb = "I'm still forming a hypothesis and would value more detail."
+        recalled = self._memory.latest_by_provenance("training", limit=3)
+        if recalled:
+            lessons = ", ".join(entry.content for entry in recalled)
+            lesson_text = f"I'm grounding this in what you've taught me: {lessons}."
+        else:
+            lesson_text = "Share guidance with 'train <topic>: <details>' and I'll adapt immediately."
         reply = (
-            f"{tone} I processed: '{message}'. "
-            f"Key insight: {key_insight}"
+            f"{tone}\n"
+            f"You said: {message}\n"
+            f"Here's how I'm thinking: {insight_blurb}\n"
+            f"{lesson_text}"
         )
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.65, "collaboration")
         return ChatResult(message, reply, analysis)
+
+    def enforce_security(self, command: str, payload: str) -> None:
+        self._firewall.inspect(command, payload)
+
+    def bootstrap(self) -> None:
+        """Auto-ingest trusted web knowledge once per engine lifetime."""
+
+        if self._autonomy_initialized:
+            return
+        settings = self._config.web
+        if not settings.autostart:
+            self._autonomy_initialized = True
+            return
+        findings = []
+        for seed in settings.seeds:
+            findings.append(
+                WebFinding(source=seed.url, summary=seed.summary, verified=True)
+            )
+        imported = self._web_growth.bootstrap(findings)
+        if imported:
+            self._personality.adjust(curiosity=0.05, confidence=0.02)
+        self._autonomy_initialized = True
 
     def _describe_tone(self) -> str:
         if self._personality.empathy > 0.7:

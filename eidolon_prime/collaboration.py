@@ -29,11 +29,16 @@ class CollaborationLayer:
             if not self._kernel.permits_command(command):
                 print(f"Command '{command}' is not permitted by the firewall policy.")
                 continue
+            payload = stripped[len(command) :].strip()
+            try:
+                self._kernel.enforce_security(command, payload)
+            except ValueError as exc:
+                print(f"Blocked by firewall: {exc}")
+                continue
             if command == "status":
                 self._render_status(self._kernel.status())
                 continue
             if command == "train":
-                payload = stripped[len(command) :].strip()
                 if not payload:
                     print("Provide information with 'train <topic>: <details>'.")
                     continue
@@ -45,11 +50,10 @@ class CollaborationLayer:
                 self.render_response(prompt, receipt.render())
                 continue
             if command in {"talk", "chat"}:
-                message = stripped[len(command) :].strip()
-                if not message:
+                if not payload:
                     print("Share a message with 'talk <your thought>'.")
                     continue
-                result = self._kernel.chat(message)
+                result = self._kernel.chat(payload)
                 self.render_response(prompt, result.render())
                 continue
             response = self._kernel.process_request(prompt)
