@@ -130,7 +130,9 @@ The following guide assumes you have minimal technical experience. Each step is 
 ### 6. Interact with the System
 1. Begin with simple requests such as `help` or `status` to explore available commands.
 2. Ask Eidolon Prime to perform tasks like generating a small script, analyzing a snippet of code, or proposing a plan for a project.
-3. Each response includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, and Reflection Engine rationale so you can inspect the entire reasoning chain.
+3. Teach the engine explicitly by typing commands such as `train data-model: Document the new data validation rules`. The training ground logs your guidance, stores it in the memory web, and gently boosts the engine’s curiosity so it can build on what you taught it.
+4. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime will reply in plain language and include a transparent “analysis trace” showing which agents contributed to the answer.
+5. Each response includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, and Reflection Engine rationale so you can inspect the entire reasoning chain.
 
 ### 7. Review Reasoning Trails
 1. During a session you can type `status` at any time to inspect the live personality vectors and a summary of recorded memories.

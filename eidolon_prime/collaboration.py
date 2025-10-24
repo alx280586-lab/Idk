@@ -18,18 +18,39 @@ class CollaborationLayer:
             except (EOFError, KeyboardInterrupt):
                 print("\nShutting down. Goodbye!")
                 break
-            command = prompt.strip().split(" ", 1)[0].lower()
+            stripped = prompt.strip()
+            command = stripped.split(" ", 1)[0].lower()
             if command == "exit":
                 print("Session closed by user.")
                 break
             if command == "help":
                 print(self._help_message())
                 continue
+            if not self._kernel.permits_command(command):
+                print(f"Command '{command}' is not permitted by the firewall policy.")
+                continue
             if command == "status":
                 self._render_status(self._kernel.status())
                 continue
-            if not self._kernel.permits_command(command):
-                print(f"Command '{command}' is not permitted by the firewall policy.")
+            if command == "train":
+                payload = stripped[len(command) :].strip()
+                if not payload:
+                    print("Provide information with 'train <topic>: <details>'.")
+                    continue
+                try:
+                    receipt = self._kernel.train(payload)
+                except ValueError as exc:
+                    print(f"Training aborted: {exc}")
+                    continue
+                self.render_response(prompt, receipt.render())
+                continue
+            if command in {"talk", "chat"}:
+                message = stripped[len(command) :].strip()
+                if not message:
+                    print("Share a message with 'talk <your thought>'.")
+                    continue
+                result = self._kernel.chat(message)
+                self.render_response(prompt, result.render())
                 continue
             response = self._kernel.process_request(prompt)
             self.render_response(prompt, response.render())
@@ -61,5 +82,7 @@ class CollaborationLayer:
             "  plan   - request agents to devise a plan\n"
             "  reflect- trigger reflection cycle\n"
             "  log    - ask for a narrative explanation\n"
+            "  train  - feed new knowledge into the training ground\n"
+            "  talk   - chat with Eidolon Prime about anything on your mind\n"
             "  exit   - quit the session"
         )

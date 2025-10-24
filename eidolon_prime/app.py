@@ -14,6 +14,7 @@ from .reflection import ReflectionEngine
 from .web_growth import WebGrowthSystem
 from .collaboration import CollaborationLayer
 from .state import PersonalityState
+from .training import TrainingGround
 
 
 @dataclass
@@ -33,6 +34,7 @@ class EidolonPrimeApp:
         forge = Forge(memory)
         reflection = ReflectionEngine(personality, memory)
         web_growth = WebGrowthSystem(memory, firewall)
+        training = TrainingGround(memory)
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -48,6 +50,7 @@ class EidolonPrimeApp:
             forge=forge,
             firewall=firewall,
             reflection=reflection,
+            training=training,
         )
         collaboration = CollaborationLayer(kernel)
         return cls(config=config, kernel=kernel, collaboration=collaboration)
@@ -59,5 +62,40 @@ class EidolonPrimeApp:
     def run_scripted(self, prompts: Iterable[str]) -> None:
         """Process a series of prompts without user interaction."""
         for prompt in prompts:
+            stripped = prompt.strip()
+            if not stripped:
+                continue
+            command = stripped.split(" ", 1)[0].lower()
+            if command == "train":
+                payload = stripped[len(command) :].strip()
+                if not payload:
+                    raise ValueError("Scripted training commands must include details.")
+                receipt = self.kernel.train(payload)
+                self.collaboration.render_response(prompt, receipt.render())
+                continue
+            if command in {"talk", "chat"}:
+                message = stripped[len(command) :].strip()
+                if not message:
+                    raise ValueError("Scripted talk commands must include a message.")
+                result = self.kernel.chat(message)
+                self.collaboration.render_response(prompt, result.render())
+                continue
+            if not self.kernel.permits_command(command):
+                raise ValueError(f"Command '{command}' is not permitted in scripted mode.")
+            if command == "status":
+                status = self.kernel.status()
+                content = (
+                    "System resources:\n"
+                    + "\n".join(f"- {k}: {v}" for k, v in status.resources.items())
+                    + f"\nPersonality: {status.personality}\n"
+                    + "Memories:\n"
+                    + (
+                        "  (empty)"
+                        if not status.memory_stats
+                        else "\n".join(f"  {topic}: {count}" for topic, count in status.memory_stats.items())
+                    )
+                )
+                self.collaboration.render_response(prompt, content)
+                continue
             response = self.kernel.process_request(prompt)
             self.collaboration.render_response(prompt, response.render())

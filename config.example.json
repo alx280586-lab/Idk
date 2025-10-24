@@ -11,6 +11,15 @@
     "integrity": 0.8
   },
   "security": {
-    "allowed_commands": ["help", "status", "plan", "reflect", "log"]
+    "allowed_commands": [
+      "help",
+      "status",
+      "plan",
+      "reflect",
+      "log",
+      "train",
+      "talk",
+      "chat"
+    ]
   }
 }

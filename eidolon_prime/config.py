@@ -33,7 +33,18 @@ class PersonalitySettings:
 class SecuritySettings:
     """Operational safety rules."""
 
-    allowed_commands: List[str] = field(default_factory=lambda: ["help", "status", "plan", "reflect", "log"])
+    allowed_commands: List[str] = field(
+        default_factory=lambda: [
+            "help",
+            "status",
+            "plan",
+            "reflect",
+            "log",
+            "train",
+            "talk",
+            "chat",
+        ]
+    )
 
 
 @dataclass
