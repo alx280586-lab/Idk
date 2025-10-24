@@ -13,7 +13,7 @@ from luau_lab import (
 
 def bootstrap_engine() -> DialogueEngine:
     config = load_config()
-    retriever = RetrievalClient(config.allowed_sources)
+    retriever = RetrievalClient(config.get_allowed_sources())
     trainer = TrainingSuite(config, retriever=retriever)
     synthesizer = LuauSynthesizer(trainer.heuristics)
     engine = DialogueEngine(

@@ -8,7 +8,7 @@ from luau_lab import RetrievalClient, TrainingSuite, load_config
 
 def main() -> None:
     config = load_config()
-    retriever = RetrievalClient(config.allowed_sources)
+    retriever = RetrievalClient(config.get_allowed_sources())
     trainer = TrainingSuite(config, retriever=retriever)
     summary = trainer.run_all()
     print(json.dumps(summary, indent=2))

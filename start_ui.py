@@ -1,6 +1,3 @@
-"""Helper script to launch the Luau Synthesis Lab web UI with minimal setup."""
-from __future__ import annotations
-
 import argparse
 import threading
 import time
@@ -37,7 +34,7 @@ def main() -> None:
 
     if args.train:
         config = load_config()
-        retriever = RetrievalClient(config.allowed_sources)
+        retriever = RetrievalClient(config.get_allowed_sources())
         suite = TrainingSuite(config, retriever=retriever)
         summary = suite.run_all()
         print("Training summary:")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List
 
 import yaml
 
@@ -70,12 +70,11 @@ class DialogueEngine:
                         snippets = entry.get("snippets")
                         if isinstance(snippets, list):
                             snippet_count += len(snippets)
+            prefix = self._persona_pick("training_complete", default="Training complete!")
             return (
-                "Training complete. Loaded examples: {count}. Updated naming style to {style}. Harvested {snippets} doc snippets."
-            ).format(
-                count=len(summary.get("examples", [])),
-                style=summary.get("heuristics", {}).get("naming", {}).get("function_case", "camel"),
-                snippets=snippet_count,
+                f"{prefix} Loaded {len(summary.get('examples', []))} local examples, "
+                f"refreshed naming to {summary.get('heuristics', {}).get('naming', {}).get('function_case', 'camel')}, "
+                f"and captured {snippet_count} doc snippets from the allowlist."
             )
 
         if lowered.startswith("doc ") or lowered.startswith("fetch "):
@@ -89,21 +88,38 @@ class DialogueEngine:
             except ValueError as exc:  # URL blocked
                 return str(exc)
             except Exception as exc:  # network issue
-                return f"Failed to fetch: {exc}"
+                return f"I tried hitting that page but ran into: {exc}"
             if not result.snippets:
-                return f"No matches for '{query}' on {result.source}."
+                return f"I checked {result.source} but couldn’t spot '{query}' in the text."
             joined = "\n".join(f"- {snippet}" for snippet in result.snippets)
-            return f"Snippets from {result.source}:\n{joined}"
+            return f"Here’s what I found on {result.source}:\n{joined}"
 
         if "explain" in lowered and "```" in user_input:
             code = self._extract_code(user_input)
             explanations = self.synthesizer.explain(code)
-            return "\n".join(explanations)
+            intro = self._persona_pick("explanation_intro", default="Here’s what’s happening:")
+            return "\n".join([intro, ""] + explanations)
 
         if any(keyword in lowered for keyword in ("script", "function", "code")):
             code = self.synthesizer.generate(user_input)
-            explanation = "\n".join(self.synthesizer.explain(code))
-            return f"```lua\n{code}\n```\n\n{explanation}"
+            explanation_lines = self.synthesizer.explain(code)
+            intro = self._persona_pick("script_intro", default="Here’s the script I put together:")
+            explain_intro = self._persona_pick(
+                "explanation_intro", default="Here’s what it does:"
+            )
+            return "\n".join(
+                [
+                    intro,
+                    "",
+                    "```lua",
+                    code,
+                    "```",
+                    "",
+                    explain_intro,
+                    "",
+                    *explanation_lines,
+                ]
+            )
 
         return self._persona_pick("fallback", default="Tell me what script you need.")
 

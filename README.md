@@ -6,6 +6,7 @@ A laptop-friendly Roblox scripting assistant that generates Luau code, explains 
 
 - **Chatbot CLI and web UI** – talk to the lab from your terminal or browser.
 - **Template-driven Luau generator** – request spawn/teleport/storm helpers and receive working scripts with explanations.
+- **Seeded training corpus** – over 200 ready-to-run Luau samples live in `data/examples` so training works even before you add your own code.
 - **One-file training suite** – mine your `data/examples` and `data/tests` to keep heuristics aligned with your codebase.
 - **Doc retrieval** – supply trusted documentation URLs; the lab will pull contextual snippets on demand.
 - **Session memory** – the last few turns are written to `session.json` for review and debugging.
@@ -25,12 +26,24 @@ heuristics.yaml
 persona.yaml
 main.py
 web_server.py
+start_ui.py
+start_training.py
+train_lab.py
 data/
+  allowed_sources_extra.txt
+  docs_cache/
   examples/
+    generated_001_spawn.lua
+    generated_002_teleport.lua
+    … (hundreds more)
     spawn.lua
   tests/
     spawn_test.json
+index.html
 requirements.txt
+scripts/
+  seed_examples.py
+  seed_sources.py
 ```
 
 ## Setup
@@ -126,7 +139,7 @@ If an error mentions missing build tools, install the tool it suggests (for exam
 
 Open these files in your text editor and adjust them to match how you want the bot to behave:
 
-- **`config.yaml`** – update the `allowed_sources` list with the full URLs of the documentation sites you trust (e.g. `https://create.roblox.com/docs/`). The retriever refuses to access sites not listed here.
+- **`config.yaml`** – update the `allowed_sources` list with the full URLs of the documentation sites you trust (e.g. `https://create.roblox.com/docs/`). The retriever refuses to access sites not listed here. The `allowed_source_files` entry already points at `data/allowed_sources_extra.txt`, which contains hundreds of Roblox doc links you can keep or trim.
 - **`persona.yaml`** – set the bot’s `name`, tone keywords, and example phrases so the dialogue sounds the way you prefer.
 - **`heuristics.yaml`** – stores preferences learned from training. You can leave it alone initially; delete it later if you want to reset the bot’s memory.
 
@@ -134,8 +147,9 @@ Save the files after editing them. The chatbot loads these files each time it st
 
 ### 5. Add example scripts and tests (optional but recommended)
 
-1. Copy Luau scripts you like into the `data/examples/` folder. The provided `spawn.lua` file shows the expected format.
-2. (Optional) Add JSON files inside `data/tests/` to describe how the scripts should behave. The sample `spawn_test.json` file demonstrates the structure.
+1. Browse the `data/examples/` folder. It already holds more than 200 generated helpers (spawn, teleport, remotes, UI, etc.) so the lab can learn immediately.
+2. Drop any of your own `.lua` or `.luau` files into the same folder to teach the lab your style.
+3. (Optional) Add JSON files inside `data/tests/` to describe how the scripts should behave. The sample `spawn_test.json` file demonstrates the structure.
 
 You can skip this step at first and come back later when you have your own scripts to teach the bot.
 
@@ -143,11 +157,15 @@ You can skip this step at first and come back later when you have your own scrip
 
 Training scans the examples/tests and updates `heuristics.yaml`.
 
+Run whichever command you prefer:
+
 ```bash
-python -m luau_lab.training
+python start_training.py
+# or
+python train_lab.py
 ```
 
-Keep the virtual environment activated while running this command. The terminal output should mention each example that was processed. Rerun training whenever you add or change example files.
+Keep the virtual environment activated while running these commands. The terminal output lists every example processed and how many documentation snippets were harvested. Rerun training whenever you add or change example files.
 
 ## Running the chatbot (CLI)
 
@@ -250,9 +268,11 @@ This approach keeps everything local and avoids extra steps—once your environm
 
 ## Training suite (single entry point)
 
-All training logic lives in `luau_lab/training.py`. To run it manually:
+All training logic lives in `luau_lab/training.py`. To run it manually use either helper:
 
 ```bash
+python start_training.py
+# or
 python -m luau_lab.training
 ```
 
@@ -268,7 +288,7 @@ If you want the lab to forget what it has learned, delete `heuristics.yaml` and 
 
 ## Using documentation retrieval
 
-1. Add every site you trust to the `allowed_sources` list in `config.yaml` (include the `https://` part). Example:
+1. Add every site you trust to the `allowed_sources` list in `config.yaml` (include the `https://` part) or append them to `data/allowed_sources_extra.txt`. Example:
 
    ```yaml
    allowed_sources:
@@ -292,7 +312,7 @@ This feature only reads the pages you explicitly allow and never follows other l
 2. Ask for a script: `Can you write a Luau function that picks a random SpawnLocation tagged NPC?`
 3. Copy the code between the triple backticks (` ```lua ... ``` `) into a new Script or ModuleScript in Roblox Studio.
 4. Read the explanation lines below the code to understand what each part does.
-5. If you adjust the generated code manually and want the bot to learn your style, save it in `data/examples/` and rerun `python -m luau_lab.training`.
+5. If you adjust the generated code manually and want the bot to learn your style, save it in `data/examples/` and rerun `python start_training.py` (or `python -m luau_lab.training`).
 6. Use the `doc` command whenever you need reminders from the Roblox documentation.
 
 ## Troubleshooting

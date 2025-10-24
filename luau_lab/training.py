@@ -95,7 +95,7 @@ class TrainingSuite:
         )
 
         summary: Dict[str, List[Dict[str, object]]] = {}
-        for source in self.config.allowed_sources:
+        for source in self.config.get_allowed_sources():
             source_entries: List[Dict[str, object]] = []
             for query in queries:
                 try:

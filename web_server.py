@@ -1,18 +1,17 @@
-"""Flask server exposing the Luau Synthesis Lab over HTTP."""
 from __future__ import annotations
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from luau_lab import load_config
 from luau_lab.dialogue import DialogueEngine
+from luau_lab.retrieval import RetrievalClient
 from luau_lab.synthesizer import LuauSynthesizer
 from luau_lab.training import TrainingSuite
-from luau_lab.retrieval import RetrievalClient
 
 app = Flask(__name__)
 
 _config = load_config()
-_retriever = RetrievalClient(_config.allowed_sources)
+_retriever = RetrievalClient(_config.get_allowed_sources())
 _trainer = TrainingSuite(_config, retriever=_retriever)
 _synthesizer = LuauSynthesizer(_trainer.heuristics)
 _engine = DialogueEngine(

@@ -3,10 +3,12 @@ allowed_sources:
   - "https://devforum.roblox.com/"
   - "https://luau-lang.org/"
   - "https://api.roblox.com/"
+allowed_source_files:
+  - "data/allowed_sources_extra.txt"
 style:
   default_random_seed: 1337
   prefer_random_new: false
-  explanation_depth: medium
+  explanation_depth: rich
 training:
   examples_dir: "data/examples"
   tests_dir: "data/tests"
@@ -16,7 +18,13 @@ training:
     - "spawn"
     - "RemoteEvent"
     - "PathfindingService"
+    - "TweenService"
+    - "DataStore"
+    - "TeleportService"
   docs_cache_dir: "data/docs_cache"
 docs:
   queries:
     - "CollectionService"
+    - "Humanoid"
+    - "RemoteEvent"
+    - "Luau"

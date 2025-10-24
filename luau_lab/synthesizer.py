@@ -51,28 +51,53 @@ class LuauSynthesizer:
 
     def explain(self, code: str) -> List[str]:
         explanation: List[str] = []
+        summary = self._summarize(code)
+        if summary:
+            explanation.append(summary)
         for idx, line in enumerate(code.splitlines(), start=1):
             stripped = line.strip()
             if not stripped:
                 continue
             if stripped.startswith("local CollectionService"):
                 explanation.append(
-                    f"Line {idx}: Acquire CollectionService so we can query tagged instances."
+                    f"Line {idx}: Grab CollectionService so we can pull objects by tag."
                 )
             elif "GetTagged" in stripped:
                 explanation.append(
-                    f"Line {idx}: Collect only parts tagged with the requested label."
+                    f"Line {idx}: Build a list of parts carrying the requested tag."
                 )
-            elif "math.random" in stripped or "Random.new" in stripped:
+            elif "math.random" in stripped:
                 explanation.append(
-                    f"Line {idx}: Choose a random spawn to avoid clustering."
+                    f"Line {idx}: Use math.random for a simple, uniform choice of spawn point."
                 )
-            elif "Position" in stripped:
+            elif "Random.new" in stripped:
                 explanation.append(
-                    f"Line {idx}: Return a Vector3 position for the caller to use."
+                    f"Line {idx}: Spin up a Random instance so we control the RNG and avoid globals."
+                )
+            elif "warn(" in stripped:
+                explanation.append(
+                    f"Line {idx}: Warn you immediately if we can’t find anything to work with."
+                )
+            elif "Position" in stripped and "return" in stripped:
+                explanation.append(
+                    f"Line {idx}: Hand back the Vector3 position so callers can place characters there."
+                )
+            elif "HumanoidRootPart" in stripped and "CFrame" in stripped:
+                explanation.append(
+                    f"Line {idx}: Snap the player’s HumanoidRootPart to the destination so teleporting is instant."
+                )
+            elif "RemoteEvent" in stripped and "FireServer" in stripped:
+                explanation.append(
+                    f"Line {idx}: Fire the remote safely from the client towards the server."
+                )
+            elif "TweenService" in stripped and "Create" in stripped:
+                explanation.append(
+                    f"Line {idx}: Animate the GUI transition with a quick tween so it feels polished."
                 )
             elif stripped.startswith("return"):
-                explanation.append(f"Line {idx}: Expose the main function to other scripts.")
+                explanation.append(
+                    f"Line {idx}: Return the helper so other scripts can require this module."
+                )
             else:
                 explanation.append(f"Line {idx}: {stripped}")
         return explanation
@@ -83,23 +108,26 @@ class LuauSynthesizer:
         prefer_random_new = self.heuristics.get("preferences", {}).get("prefer_random_new", False)
         function_name = self._format_name("pickRandomSpawn", kind="function")
         tag_parameter = request.tag or "NPC"
-        rng_line = (
+        rng_block = (
             "    local rng = Random.new()\n"
-            "    local choice = spawns[rng:NextInteger(1, #spawns)]"
+            "    local index = rng:NextInteger(1, #candidates)\n"
+            "    local chosen = candidates[index]"
         ) if prefer_random_new else (
-            "    local choice = spawns[math.random(1, #spawns)]"
+            "    local index = math.random(1, #candidates)\n"
+            "    local chosen = candidates[index]"
         )
 
         lines = [
             "local CollectionService = game:GetService(\"CollectionService\")",
             "",
-            f"local function {function_name}(spawnTag)",
-            "    local spawns = CollectionService:GetTagged(spawnTag or \"%s\")" % tag_parameter,
-            "    if #spawns == 0 then",
+            f"local function {function_name}(tagName)",
+            "    local candidates = CollectionService:GetTagged(tagName or \"%s\")" % tag_parameter,
+            "    if #candidates == 0 then",
+            "        warn(\"No spawn points tagged\", tagName)",
             "        return nil",
             "    end",
-            rng_line,
-            "    return choice.Position",
+            rng_block,
+            "    return chosen.Position",
             "end",
             "",
             "return %s" % function_name,
@@ -110,11 +138,17 @@ class LuauSynthesizer:
         lines = [
             "local Players = game:GetService(\"Players\")",
             "",
-            "local function teleportPlayer(player, destination)",
-            "    assert(player and destination, \"Missing player or destination\")",
-            "    if player.Character and player.Character:FindFirstChild(\"HumanoidRootPart\") then",
-            "        player.Character.HumanoidRootPart.CFrame = destination.CFrame",
+            "local function teleportPlayer(playerName, destination)",
+            "    local player = Players:FindFirstChild(playerName)",
+            "    if not player or not player.Character then",
+            "        return false",
             "    end",
+            "    local root = player.Character:FindFirstChild(\"HumanoidRootPart\")",
+            "    if root then",
+            "        root.CFrame = destination.CFrame",
+            "        return true",
+            "    end",
+            "    return false",
             "end",
             "",
             "return teleportPlayer",
@@ -124,7 +158,6 @@ class LuauSynthesizer:
     def _storm_template(self) -> str:
         lines = [
             "local RunService = game:GetService(\"RunService\")",
-            "local Workspace = game:GetService(\"Workspace\")",
             "",
             "local function startStorm(pixelFolder, duration)",
             "    local elapsed = 0",
@@ -175,3 +208,21 @@ class LuauSynthesizer:
     def _to_snake(self, value: str) -> str:
         parts = re.split(r"[_\-]", value)
         return "_".join(part.lower() for part in parts if part)
+
+    def _summarize(self, code: str) -> Optional[str]:
+        lowered = code.lower()
+        function_name_match = re.search(r"function\s+([a-zA-Z0-9_]+)", code)
+        fn_name = function_name_match.group(1) if function_name_match else "the helper"
+        if "collectionservice" in lowered and "gettagged" in lowered:
+            return (
+                f"This helper '{fn_name}' looks up CollectionService tags and hands back a random spawn point."
+            )
+        if "humanoidrootpart" in lowered and "cframe" in lowered:
+            return f"'{fn_name}' teleports a player straight to whatever part you pass in."
+        if "remoteevent" in lowered and "fireserver" in lowered:
+            return f"'{fn_name}' safely fires a RemoteEvent by name if it exists."
+        if "tweenservice" in lowered and "create" in lowered:
+            return f"'{fn_name}' animates a GUI element’s visibility with a quick tween."
+        if "pathfindingservice" in lowered and "createpath" in lowered:
+            return f"'{fn_name}' computes path waypoints using PathfindingService."
+        return None
