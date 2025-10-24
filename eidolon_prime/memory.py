@@ -68,8 +68,11 @@ class MemoryWeb:
             overlap = len(query_tokens & entry_tokens)
             if overlap == 0:
                 continue
-            coverage = overlap / len(entry_tokens)
-            score = coverage * 0.7 + entry.confidence * 0.3
+            query_coverage = overlap / len(query_tokens)
+            entry_coverage = overlap / len(entry_tokens)
+            if overlap < 2 and query_coverage < 0.2:
+                continue
+            score = query_coverage * 0.55 + entry_coverage * 0.15 + entry.confidence * 0.3
             scored.append((score, entry))
         scored.sort(key=lambda item: item[0], reverse=True)
         return [entry for _, entry in scored[:limit]]

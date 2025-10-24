@@ -18,6 +18,7 @@ from .training import TrainingGround
 from .conversation import ConversationDatastore
 from .language import GrammarDatastore, LanguageEngine
 from .speech import SpeechAcademy
+from .comprehension import MessageComprehender
 
 
 @dataclass
@@ -44,6 +45,7 @@ class EidolonPrimeApp:
         training = TrainingGround(memory)
         conversation = ConversationDatastore()
         language = LanguageEngine(GrammarDatastore())
+        comprehension = MessageComprehender()
         speech_academy = SpeechAcademy()
         cortex = Cortex(
             personality=personality,
@@ -65,6 +67,7 @@ class EidolonPrimeApp:
             conversation=conversation,
             language=language,
             speech=speech_academy,
+            comprehension=comprehension,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)

@@ -20,6 +20,7 @@ from .language import LanguageEngine, SemanticFrame
 from .speech import SpeechAcademy
 from .dataset import load_seed_training_corpus
 from .curriculum import load_foundational_datastores
+from .comprehension import MessageComprehender, MessageUnderstanding
 
 
 @dataclass
@@ -86,6 +87,7 @@ class Kernel:
         conversation: ConversationDatastore,
         language: LanguageEngine,
         speech: SpeechAcademy,
+        comprehension: MessageComprehender,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -99,6 +101,7 @@ class Kernel:
         self._conversation = conversation
         self._language = language
         self._speech = speech
+        self._comprehension = comprehension
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -135,25 +138,37 @@ class Kernel:
 
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
+        understanding = self._comprehension.analyse(message)
         self._speech.observe_message(message, self._memory)
-        analysis = self._cortex.process(message)
+        analysis = self._cortex.process(message, understanding=understanding)
         refresh_report: AutoTrainingReport | None = None
-        if self._should_refresh_context(message, analysis):
-            refresh_report = self.autonomous_train(message, batch_size=6)
+        if self._should_refresh_context(message, analysis, understanding):
+            focus_query = understanding.focus_text() or message
+            refresh_report = self.autonomous_train(focus_query, batch_size=6)
             self._memory.record(
                 "websearch::chat",
                 refresh_report.render(),
                 0.66,
                 "autonomous_web",
             )
-            analysis = self._cortex.process(message)
+            analysis = self._cortex.process(message, understanding=understanding)
             analysis.reasoning_summary = (
                 analysis.reasoning_summary
                 + f" I refreshed context with a web-assisted practice batch (stage {refresh_report.curriculum_stage}, quiz {refresh_report.quiz_score:.2f})."
             )
-        intent, affect = self._infer_intent_and_affect(message)
+        intent, affect = self._infer_intent_and_affect(message, understanding)
         pattern = self._conversation.select_pattern(intent, affect)
-        frame = self._build_semantic_frame(message, intent, affect, analysis, pattern)
+        self._conversation.ingest_highlights(
+            (
+                f"conversation::focus::{index}",
+                highlight,
+                highlight,
+            )
+            for index, highlight in enumerate(understanding.highlights(), start=1)
+        )
+        frame = self._build_semantic_frame(
+            message, intent, affect, analysis, pattern, understanding
+        )
         reply_body, lexical = self._language.compose_reply(
             frame,
             pattern.structure,
@@ -182,6 +197,12 @@ class Kernel:
             self._personality.adjust(empathy=0.005)
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.68, "collaboration")
+        self._memory.record(
+            "conversation::understanding",
+            understanding.summary(),
+            0.64,
+            "conversation",
+        )
         self._memory.record(
             "conversation::output_area",
             f"Reply displayed in output area for '{message}'",
@@ -316,32 +337,44 @@ class Kernel:
         thread = self._continuous_training_thread
         return bool(thread and thread.is_alive())
 
-    def _should_refresh_context(self, message: str, analysis: CortexResult) -> bool:
-        if len(message.split()) < 3:
-            return False
+    def _should_refresh_context(
+        self,
+        message: str,
+        analysis: CortexResult,
+        understanding: MessageUnderstanding | None = None,
+    ) -> bool:
+        if understanding and understanding.question and len(analysis.related_memories) < 4:
+            return True
         if len(analysis.related_memories) >= 3:
             return False
-        keywords = {token for token in message.lower().split() if len(token) > 3}
-        if not keywords:
+        if understanding and len(understanding.focus_terms) >= 3:
+            return True
+        if understanding and understanding.urgency:
+            return True
+        if len(message.split()) < 3:
             return False
-        return True
+        keywords = {token for token in message.lower().split() if len(token) > 3}
+        return bool(keywords)
 
-    def _infer_intent_and_affect(self, message: str) -> tuple[str, str]:
+    def _infer_intent_and_affect(
+        self, message: str, understanding: MessageUnderstanding
+    ) -> tuple[str, str]:
         lowered = message.lower().strip()
         intent = "explain"
         greeting_prefixes = ("hello", "hi", "hey", "greetings", "good morning", "good evening", "good afternoon")
         if any(lowered.startswith(prefix) for prefix in greeting_prefixes):
             intent = "conversation"
-        if "?" in message or any(
-            lowered.startswith(prefix)
-            for prefix in ("how", "what", "why", "where", "when")
-        ):
+        if understanding.question:
             intent = "question"
         elif any(keyword in lowered for keyword in ("plan", "design", "build", "fix")):
             intent = "problem_solving"
         elif any(keyword in lowered for keyword in ("motivate", "inspire", "story")):
             intent = "motivate"
-        affect = self._compute_user_affect(lowered)
+        elif understanding.command_clauses:
+            intent = "problem_solving"
+        affect = understanding.affect or self._compute_user_affect(lowered)
+        if understanding.urgency and affect == "neutral":
+            affect = "stressed"
         return intent, affect
 
     def _compute_user_affect(self, lowered: str) -> str:
@@ -360,13 +393,16 @@ class Kernel:
         affect: str,
         analysis: CortexResult,
         pattern: ConversationPattern,
+        understanding: MessageUnderstanding,
     ) -> SemanticFrame:
-        topic = self._derive_topic(message, analysis.related_memories)
-        key_points = self._extract_key_points(analysis.responses, analysis.reasoning_summary)
-        evidence = self._extract_evidence(analysis.related_memories)
-        actions = self._extract_actions(analysis)
-        emotional_tone = self._derive_emotional_tone(pattern.tone, affect)
-        call_to_action = self._craft_call_to_action(analysis, actions)
+        topic = self._derive_topic(message, analysis.related_memories, understanding)
+        key_points = self._extract_key_points(
+            analysis.responses, analysis.reasoning_summary, understanding
+        )
+        evidence = self._extract_evidence(analysis.related_memories, understanding)
+        actions = self._extract_actions(analysis, understanding)
+        emotional_tone = self._derive_emotional_tone(pattern.tone, affect, understanding)
+        call_to_action = self._craft_call_to_action(analysis, actions, understanding)
         outcome = analysis.reflection.rationale
         return SemanticFrame(
             intent=intent,
@@ -380,17 +416,36 @@ class Kernel:
             outcome=outcome,
         )
 
-    def _derive_topic(self, message: str, memories: Iterable[MemoryEntry]) -> str:
+    def _derive_topic(
+        self,
+        message: str,
+        memories: Iterable[MemoryEntry],
+        understanding: MessageUnderstanding,
+    ) -> str:
         memory_list = list(memories)
         if memory_list:
-            return memory_list[0].topic.replace("::", " → ")
+            topic_text = memory_list[0].topic.replace("::", " → ").replace("_", " ")
+            parts = [segment.strip() for segment in topic_text.split(" → ") if segment.strip()]
+            if parts:
+                topic_text = " → ".join(parts[:3])
+            return topic_text
+        if understanding.focus_pairs:
+            return understanding.focus_pairs[0]
+        if understanding.focus_terms:
+            return " ".join(understanding.focus_terms[:4])
         tokens = [token.strip(".,!?;:") for token in message.split() if len(token) > 3]
         return " ".join(tokens[:4]) if tokens else message[:32]
 
     def _extract_key_points(
-        self, responses: Iterable[AgentResponse], reasoning_summary: str
+        self,
+        responses: Iterable[AgentResponse],
+        reasoning_summary: str,
+        understanding: MessageUnderstanding,
     ) -> List[str]:
         insights = []
+        for highlight in understanding.highlights():
+            if highlight not in insights:
+                insights.append(highlight)
         for response in responses:
             humanized = self._humanize_insight(response)
             if humanized not in insights:
@@ -401,7 +456,9 @@ class Kernel:
             insights.append(reasoning_summary)
         return insights
 
-    def _extract_actions(self, analysis: CortexResult) -> List[str]:
+    def _extract_actions(
+        self, analysis: CortexResult, understanding: MessageUnderstanding
+    ) -> List[str]:
         actions: List[str] = []
         for result in analysis.experiments:
             if result.success:
@@ -411,6 +468,10 @@ class Kernel:
                 )
         if analysis.reasoning_summary and analysis.reasoning_summary not in actions:
             actions.append(analysis.reasoning_summary)
+        for clause in understanding.command_clauses:
+            clean_clause = clause.strip().rstrip(".")
+            if clean_clause and clean_clause not in actions:
+                actions.append(f"address your request to {clean_clause}")
         return actions[:4]
 
     def _humanize_insight(self, response: AgentResponse) -> str:
@@ -436,7 +497,9 @@ class Kernel:
             return text.replace("I structured the prompt", "stress-test the prompt", 1).rstrip(".")
         return text.rstrip(".")
 
-    def _extract_evidence(self, memories: Iterable[MemoryEntry]) -> List[str]:
+    def _extract_evidence(
+        self, memories: Iterable[MemoryEntry], understanding: MessageUnderstanding
+    ) -> List[str]:
         evidence_lines: List[str] = []
         for entry in list(memories)[:4]:
             snippet = entry.content
@@ -445,11 +508,21 @@ class Kernel:
             evidence_lines.append(
                 f"{entry.topic} → {snippet} (confidence {entry.confidence:.2f})"
             )
+        if not evidence_lines and understanding.focus_terms:
+            evidence_lines.append(
+                "Focus alignment: "
+                + ", ".join(understanding.focus_terms[:4])
+                + " (derived from your wording)."
+            )
         return evidence_lines
 
-    def _derive_emotional_tone(self, desired_tone: str, affect: str) -> str:
+    def _derive_emotional_tone(
+        self, desired_tone: str, affect: str, understanding: MessageUnderstanding
+    ) -> str:
         if affect == "stressed":
             return "calm and steady"
+        if understanding.affect == "positive":
+            return "warm and collaborative"
         if self._personality.empathy > 0.7:
             return "deeply supportive"
         if desired_tone == "encouraging" and self._personality.curiosity > 0.6:
@@ -459,10 +532,15 @@ class Kernel:
         return desired_tone or "balanced"
 
     def _craft_call_to_action(
-        self, analysis: CortexResult, actions: List[str]
+        self,
+        analysis: CortexResult,
+        actions: List[str],
+        understanding: MessageUnderstanding,
     ) -> str:
         if actions:
             return f"Let's act on {actions[0]} next."
+        if understanding.command_clauses:
+            return f"I'll keep exploring how to {understanding.command_clauses[0]} and report back."
         return (
             analysis.reasoning_summary
             or "I'm ready to dig further once you highlight the next angle."

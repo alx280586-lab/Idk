@@ -20,7 +20,10 @@ class SemanticFrame:
     outcome: str
 
     def condensed_topic(self) -> str:
-        return self.topic or "the subject you raised"
+        if not self.topic:
+            return "the subject you raised"
+        cleaned = self.topic.replace("_", " ").strip()
+        return cleaned or "the subject you raised"
 
 
 @dataclass

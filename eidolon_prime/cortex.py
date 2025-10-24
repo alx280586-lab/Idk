@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List, Optional
 
 from .state import PersonalityState
 from .forge import Forge
 from .memory import MemoryWeb, MemoryEntry
 from .reflection import ReflectionEngine, ReflectionReport
 from .web_growth import WebGrowthSystem, WebFinding
+from .comprehension import MessageUnderstanding
 
 
 @dataclass
@@ -30,6 +31,7 @@ class Agent:
         personality: PersonalityState,
         memory: MemoryWeb,
         related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
     ) -> List[AgentResponse]:
         raise NotImplementedError
 
@@ -43,6 +45,7 @@ class LogicAgent(Agent):
         personality: PersonalityState,
         memory: MemoryWeb,
         related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
     ) -> List[AgentResponse]:
         if related:
             domain = related[0].topic.split("::")[0]
@@ -51,10 +54,21 @@ class LogicAgent(Agent):
                 f" at {personality.confidence:.2f}."
             )
         else:
-            analysis = (
-                f"Structured the prompt '{prompt}' into actionable checkpoints"
-                f" with confidence {personality.confidence:.2f}."
-            )
+            focus_text = None
+            if context:
+                understanding = context.get("understanding")
+                if isinstance(understanding, MessageUnderstanding) and understanding.focus_terms:
+                    focus_text = ", ".join(understanding.focus_terms[:4])
+            if focus_text:
+                analysis = (
+                    f"Structured your full message around {focus_text}"
+                    f" with confidence {personality.confidence:.2f}."
+                )
+            else:
+                analysis = (
+                    f"Structured the prompt '{prompt}' into actionable checkpoints"
+                    f" with confidence {personality.confidence:.2f}."
+                )
         return [AgentResponse(self.name, analysis)]
 
 
@@ -67,6 +81,7 @@ class CuriosityAgent(Agent):
         personality: PersonalityState,
         memory: MemoryWeb,
         related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
     ) -> List[AgentResponse]:
         if personality.curiosity < 0.3:
             return [AgentResponse(self.name, "Curiosity low; recommending incremental exploration.")]
@@ -82,6 +97,7 @@ class EthicsAgent(Agent):
         personality: PersonalityState,
         memory: MemoryWeb,
         related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
     ) -> List[AgentResponse]:
         return [AgentResponse(self.name, "Checked prompt against ethics baseline; no issues detected.")]
 
@@ -95,13 +111,19 @@ class ReasoningAgent(Agent):
         personality: PersonalityState,
         memory: MemoryWeb,
         related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
     ) -> List[AgentResponse]:
         lowered = prompt.lower().strip()
+        understanding: Optional[MessageUnderstanding] = None
+        if context:
+            candidate = context.get("understanding")
+            if isinstance(candidate, MessageUnderstanding):
+                understanding = candidate
         tokens = _keywords(lowered)
         steps: List[str] = []
         if _looks_like_greeting(lowered):
             steps.append("Recognised your greeting and will mirror a warm tone before digging deeper.")
-        if "?" in prompt or lowered.startswith(("how", "what", "why", "where", "when")):
+        if understanding and understanding.question:
             steps.append("Flagged the request as a question so I outline the answer before offering experiments.")
         if related:
             steps.append(_summarize_related_memories(related))
@@ -109,6 +131,22 @@ class ReasoningAgent(Agent):
             preview = ", ".join(tokens[:4]) if tokens else "the core idea"
             steps.append(
                 f"No stored lesson matched directly, so I'm lining up autonomous web search and practice drills around {preview}."
+            )
+        if understanding and understanding.focus_terms:
+            focus_statement = ", ".join(understanding.focus_terms[:5])
+            steps.append(
+                f"I analysed every word and mapped the core terms to {focus_statement}."
+            )
+        if understanding and understanding.focus_pairs:
+            pair_statement = ", ".join(understanding.focus_pairs[:3])
+            steps.append(
+                f"Key phrases combined into: {pair_statement}, giving me sentence-level intent."
+            )
+        if understanding and understanding.command_clauses:
+            steps.append(
+                "Detected direct requests such as "
+                + "; ".join(understanding.command_clauses[:2])
+                + " and will respond to each explicitly."
             )
         reasoning_tracks = [entry for entry in related if entry.topic.startswith("reasoning::")]
         if reasoning_tracks:
@@ -129,6 +167,8 @@ class ReasoningAgent(Agent):
             steps.append(
                 "I'll synthesise a mini plan: clarify intent, surface relevant knowledge, weigh trade-offs, and confirm next steps."
             )
+        if understanding and understanding.urgency:
+            steps.append("User phrasing signalled urgency, so I'll move faster on verification.")
         narrative = " ".join(steps)
         conclusion = "That plan shapes a grounded response that stays relevant to what you asked."
         return [AgentResponse(self.name, f"{narrative} {conclusion}")]
@@ -186,26 +226,49 @@ class Cortex:
             ReasoningAgent(),
         ]
 
-    def process(self, prompt: str) -> "CortexResult":
+    def process(
+        self,
+        prompt: str,
+        understanding: Optional[MessageUnderstanding] = None,
+    ) -> "CortexResult":
         responses: List[AgentResponse] = []
-        related = self._memory.search(prompt, limit=7)
+        query = prompt
+        if understanding:
+            focus_text = understanding.focus_text()
+            if focus_text:
+                query = f"{prompt} || {focus_text}"
+        related = self._memory.search(query, limit=7)
         if len(related) < 3:
-            report = self._web_growth.autonomous_training(prompt, batch_size=10)
+            focus = understanding.focus_text() if understanding else prompt
+            report = self._web_growth.autonomous_training(focus, batch_size=10)
             self._memory.record(
                 "cortex::auto_refresh",
                 report.render(),
                 0.66,
                 "autonomous_web",
             )
-            related = self._memory.search(prompt, limit=9)
+            related = self._memory.search(query, limit=9)
+        context: Dict[str, object] = {}
+        if understanding:
+            context["understanding"] = understanding
         for agent in self._agents:
-            responses.extend(agent.generate(prompt, self._personality, self._memory, related))
+            responses.extend(
+                agent.generate(
+                    prompt,
+                    self._personality,
+                    self._memory,
+                    related,
+                    context,
+                )
+            )
         insights = [response.insight for response in responses]
         experiments = self._forge.run(insights)
         reflection = self._reflection.review(insights)
         self._memory.record("prompt", prompt, 0.6, "cortex")
         policy = self._web_growth.describe_policy()
-        reasoning_summary = self._summarize_reasoning(prompt, related, experiments)
+        reasoning_summary = self._summarize_reasoning(
+            prompt, related, experiments, understanding
+        )
         return CortexResult(responses, experiments, reflection, policy, related, reasoning_summary)
 
     def _summarize_reasoning(
@@ -213,8 +276,15 @@ class Cortex:
         prompt: str,
         related: List[MemoryEntry],
         experiments: List,
+        understanding: Optional[MessageUnderstanding] = None,
     ) -> str:
         if not related:
+            if understanding and understanding.focus_terms:
+                focus = ", ".join(understanding.focus_terms[:4])
+                return (
+                    "I am exploring the prompt without a direct precedent in memory, "
+                    f"so I'm leaning on your highlighted terms: {focus}."
+                )
             return "I am exploring the prompt without a direct precedent in memory."
         dominant_topics = {}
         for entry in related:
@@ -223,9 +293,16 @@ class Cortex:
         ordered = sorted(dominant_topics.items(), key=lambda item: item[1], reverse=True)
         focus_domain = ordered[0][0]
         experiment_summary = " and ".join(result.description for result in experiments[:2]) if experiments else "baseline heuristics"
+        detail = ""
+        if understanding and understanding.focus_pairs:
+            detail = (
+                " I also preserved your phrasing focus around "
+                + ", ".join(understanding.focus_pairs[:3])
+                + "."
+            )
         return (
             f"I mapped your prompt '{prompt}' to the domain '{focus_domain}' using the strongest training overlaps. "
-            f"Experiments such as {experiment_summary} confirm that the retrieved lessons align with your request."
+            f"Experiments such as {experiment_summary} confirm that the retrieved lessons align with your request.{detail}"
         )
 
     def register_finding(self, finding: WebFinding) -> int:
