@@ -13,9 +13,10 @@ from .forge import Forge
 from .firewall import FirewallRing
 from .reflection import ReflectionEngine
 from .training import TrainingGround, TrainingRecord
-from .web_growth import WebGrowthSystem, WebFinding, AutoTrainingReport
+from .web_growth import WebGrowthSystem, WebFinding, AutoTrainingReport, AutoTrainingHighlight
 from .conversation import ConversationDatastore, ConversationPattern
 from .language import LanguageEngine, SemanticFrame
+from .speech import SpeechAcademy
 from .dataset import load_seed_training_corpus
 from .curriculum import load_foundational_datastores
 
@@ -78,6 +79,7 @@ class Kernel:
         web_growth: WebGrowthSystem,
         conversation: ConversationDatastore,
         language: LanguageEngine,
+        speech: SpeechAcademy,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -90,6 +92,7 @@ class Kernel:
         self._web_growth = web_growth
         self._conversation = conversation
         self._language = language
+        self._speech = speech
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -124,7 +127,22 @@ class Kernel:
 
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
+        self._speech.observe_message(message, self._memory)
         analysis = self._cortex.process(message)
+        refresh_report: AutoTrainingReport | None = None
+        if self._should_refresh_context(message, analysis):
+            refresh_report = self.autonomous_train(message, batch_size=6)
+            self._memory.record(
+                "websearch::chat",
+                refresh_report.render(),
+                0.66,
+                "autonomous_web",
+            )
+            analysis = self._cortex.process(message)
+            analysis.reasoning_summary = (
+                analysis.reasoning_summary
+                + f" I refreshed context with a web-assisted practice batch (stage {refresh_report.curriculum_stage}, quiz {refresh_report.quiz_score:.2f})."
+            )
         intent, affect = self._infer_intent_and_affect(message)
         pattern = self._conversation.select_pattern(intent, affect)
         frame = self._build_semantic_frame(message, intent, affect, analysis, pattern)
@@ -153,6 +171,13 @@ class Kernel:
             self._personality.adjust(empathy=0.005)
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.68, "collaboration")
+        if refresh_report:
+            self._memory.record(
+                "conversation::refresh",
+                f"Triggered web/practice batch for '{message}': {refresh_report.render()}",
+                0.64,
+                "autonomous_web",
+            )
         return ChatResult(message, reply, analysis)
 
     def autonomous_train(
@@ -160,14 +185,42 @@ class Kernel:
     ) -> AutoTrainingReport:
         """Trigger a curated crawl across trusted external sources."""
 
+        focus_text = (focus or "").strip()
         actual_batch = batch_size or self._config.web.cycle_batch_size
-        report = self._web_growth.autonomous_training(focus, batch_size=actual_batch)
+        report = self._web_growth.autonomous_training(focus_text or None, batch_size=actual_batch)
+        practice = self._speech.run_batch(
+            focus=focus_text,
+            batch_size=max(6, min(14, actual_batch + 4)),
+            conversation=self._conversation,
+            language=self._language,
+            personality_snapshot=self._personality.describe(),
+            memory=self._memory,
+        )
+        if practice:
+            self._memory.record(
+                f"speech_practice::summary::{practice.phase}",
+                practice.highlight_summary(),
+                0.68 + 0.2 * practice.average_success,
+                "speech_practice",
+            )
+            highlight = AutoTrainingHighlight(
+                source=f"speechlab://{practice.phase}",
+                topic=f"Speech practice — {practice.phase}",
+                summary=practice.highlight_summary(),
+                insight=practice.highlight_insight(),
+                tier="S",
+                kind="practice",
+            )
+            report.highlights.append(highlight)
+            report.imported += len(practice.outcomes)
+            if practice.phase_complete:
+                self._personality.adjust(confidence=0.02, empathy=0.02)
         if report.imported:
             self._personality.adjust(curiosity=0.04, confidence=0.02)
         else:
             self._personality.adjust(curiosity=0.01)
-        summary_topic = "autonomy::report"
-        self._memory.record(summary_topic, report.render(), 0.6, "autonomous_web")
+        summary_text = report.render()
+        self._memory.record("autonomy::report", summary_text, 0.6, "autonomous_web")
         self._conversation.ingest_highlights(
             (
                 highlight.topic,
@@ -245,6 +298,16 @@ class Kernel:
     def is_autonomous_training_running(self) -> bool:
         thread = self._continuous_training_thread
         return bool(thread and thread.is_alive())
+
+    def _should_refresh_context(self, message: str, analysis: CortexResult) -> bool:
+        if len(message.split()) < 3:
+            return False
+        if len(analysis.related_memories) >= 3:
+            return False
+        keywords = {token for token in message.lower().split() if len(token) > 3}
+        if not keywords:
+            return False
+        return True
 
     def _infer_intent_and_affect(self, message: str) -> tuple[str, str]:
         lowered = message.lower().strip()
@@ -419,6 +482,21 @@ class Kernel:
                     f"Loaded foundational datasets: {foundations} (total {total}).",
                     0.82,
                     "system",
+                )
+            practice = self._speech.run_batch(
+                focus="foundational conversation",
+                batch_size=8,
+                conversation=self._conversation,
+                language=self._language,
+                personality_snapshot=self._personality.describe(),
+                memory=self._memory,
+            )
+            if practice:
+                self._memory.record(
+                    "speech_practice::bootstrap",
+                    practice.highlight_summary(),
+                    0.7 + 0.2 * practice.average_success,
+                    "speech_practice",
                 )
             self._seed_initialized = True
         if not self._autonomous_bootstrap_complete:

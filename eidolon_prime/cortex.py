@@ -96,21 +96,56 @@ class ReasoningAgent(Agent):
         memory: MemoryWeb,
         related: List[MemoryEntry],
     ) -> List[AgentResponse]:
-        if not related:
-            return [AgentResponse(self.name, "No direct lessons matched; initiating exploratory reasoning.")]
-        representative = related[0]
-        domain, _, aspect = representative.topic.partition("::")
-        if "so that the initiative " in representative.content:
-            benefit = representative.content.split("so that the initiative ", 1)[1].rstrip(".")
+        lowered = prompt.lower().strip()
+        tokens = _keywords(lowered)
+        steps: List[str] = []
+        if _looks_like_greeting(lowered):
+            steps.append("Recognised your greeting and will mirror a warm tone before digging deeper.")
+        if "?" in prompt or lowered.startswith(("how", "what", "why", "where", "when")):
+            steps.append("Flagged the request as a question so I outline the answer before offering experiments.")
+        if related:
+            steps.append(_summarize_related_memories(related))
         else:
-            benefit = "drives measurable outcomes"
-        patterns = {entry.topic.split("::")[0] for entry in related}
-        pattern_summary = ", ".join(sorted(patterns))
-        insight = (
-            f"Synthesized {len(related)} lessons across {pattern_summary}. "
-            f"They consistently show that investing in {aspect} within {domain} empowers teams because it {benefit}."
-        )
-        return [AgentResponse(self.name, insight)]
+            preview = ", ".join(tokens[:4]) if tokens else "the core idea"
+            steps.append(
+                f"No stored lesson matched directly, so I'm lining up autonomous web search and practice drills around {preview}."
+            )
+        if any(entry.provenance == "speech_practice" for entry in related):
+            steps.append("Recent speech rehearsals give me phrasing patterns that keep the reply natural.")
+        if personality.curiosity < 0.4:
+            steps.append("I'll raise curiosity slightly so we test assumptions instead of echoing keywords.")
+        narrative = " ".join(steps)
+        conclusion = "That plan shapes a grounded response that stays relevant to what you asked."
+        return [AgentResponse(self.name, f"{narrative} {conclusion}")]
+
+
+def _keywords(text: str) -> List[str]:
+    parts = [token.strip(".,!?;:") for token in text.split() if len(token) > 3]
+    seen = []
+    for part in parts:
+        if part not in seen:
+            seen.append(part)
+    return seen
+
+
+def _looks_like_greeting(text: str) -> bool:
+    greetings = {"hello", "hi", "hey", "greetings", "good morning", "good evening"}
+    return any(text.startswith(greet) for greet in greetings)
+
+
+def _summarize_related_memories(related: List[MemoryEntry]) -> str:
+    domains = {}
+    snippets: List[str] = []
+    for entry in related[:4]:
+        head = entry.topic.split("::")[0]
+        domains[head] = domains.get(head, 0) + 1
+        snippet = entry.content
+        if len(snippet) > 90:
+            snippet = snippet[:87] + "..."
+        snippets.append(f"{head} → {snippet}")
+    focus_domains = ", ".join(f"{domain}×{count}" for domain, count in sorted(domains.items(), key=lambda item: item[1], reverse=True))
+    evidence = "; ".join(snippets)
+    return f"Mapped {len(related)} supporting memories ({focus_domains}) and will weave in evidence such as {evidence}."
 
 
 class Cortex:
