@@ -1,0 +1,522 @@
+"""Cortex and agent implementations."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
+from .state import PersonalityState
+from .forge import Forge
+from .memory import MemoryWeb, MemoryEntry
+from .reflection import ReflectionEngine, ReflectionReport
+from .web_growth import WebGrowthSystem, WebFinding
+from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
+from .orchestrator import ReasoningOrchestrator, OrchestratorResult
+from .comprehension import MessageUnderstanding
+from .reasoning import ReasoningProfile
+from .knowledge import KnowledgeGapReport
+
+
+@dataclass
+class AgentResponse:
+    """Normalized response returned by each agent."""
+
+    agent: str
+    insight: str
+
+
+class Agent:
+    """Base class for Cortex agents."""
+
+    name: str = "abstract"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        raise NotImplementedError
+
+
+class LogicAgent(Agent):
+    name = "logic"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        if related:
+            domain = related[0].topic.split("::")[0]
+            analysis = (
+                f"Mapped your request to {domain} patterns while keeping confidence"
+                f" at {personality.confidence:.2f}."
+            )
+        else:
+            focus_text = None
+            if context:
+                understanding = context.get("understanding")
+                if isinstance(understanding, MessageUnderstanding) and understanding.focus_terms:
+                    focus_text = ", ".join(understanding.focus_terms[:4])
+            if focus_text:
+                analysis = (
+                    f"Structured your full message around {focus_text}"
+                    f" with confidence {personality.confidence:.2f}."
+                )
+            else:
+                analysis = (
+                    f"Structured the prompt '{prompt}' into actionable checkpoints"
+                    f" with confidence {personality.confidence:.2f}."
+                )
+        return [AgentResponse(self.name, analysis)]
+
+
+class CuriosityAgent(Agent):
+    name = "curiosity"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        if personality.curiosity < 0.3:
+            return [AgentResponse(self.name, "Curiosity low; recommending incremental exploration.")]
+        return [AgentResponse(self.name, f"Propose exploring variant of '{prompt}'.")]
+
+
+class EthicsAgent(Agent):
+    name = "ethics"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        return [AgentResponse(self.name, "Checked prompt against ethics baseline; no issues detected.")]
+
+
+class ReasoningAgent(Agent):
+    name = "reasoning"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        lowered = prompt.lower().strip()
+        understanding: Optional[MessageUnderstanding] = None
+        plan: Optional[SyntheticThoughtPlan] = None
+        profile: Optional[ReasoningProfile] = None
+        gap_report: Optional[KnowledgeGapReport] = None
+        orchestration: Optional[OrchestratorResult] = None
+        if context:
+            candidate = context.get("understanding")
+            if isinstance(candidate, MessageUnderstanding):
+                understanding = candidate
+            plan_candidate = context.get("synthetic_plan")
+            if isinstance(plan_candidate, SyntheticThoughtPlan):
+                plan = plan_candidate
+            profile_candidate = context.get("reasoning_profile")
+            if isinstance(profile_candidate, ReasoningProfile):
+                profile = profile_candidate
+            gap_candidate = context.get("gap_report")
+            if isinstance(gap_candidate, KnowledgeGapReport):
+                gap_report = gap_candidate
+            orchestration_candidate = context.get("orchestration")
+            if isinstance(orchestration_candidate, OrchestratorResult):
+                orchestration = orchestration_candidate
+        
+        tokens = _keywords(lowered)
+        steps: List[str] = []
+        if _looks_like_greeting(lowered):
+            steps.append("Recognised your greeting and will mirror a warm tone before digging deeper.")
+        if understanding and understanding.question:
+            steps.append("Flagged the request as a question so I outline the answer before offering experiments.")
+        if related:
+            steps.append(_summarize_related_memories(related))
+        else:
+            preview = ", ".join(tokens[:4]) if tokens else "the core idea"
+            steps.append(
+                f"No stored lesson matched directly, so I'm lining up autonomous web search and practice drills around {preview}."
+            )
+        if understanding and understanding.focus_terms:
+            focus_statement = ", ".join(understanding.focus_terms[:5])
+            steps.append(
+                f"I analysed every word and mapped the core terms to {focus_statement}."
+            )
+        if understanding and understanding.focus_pairs:
+            pair_statement = ", ".join(understanding.focus_pairs[:3])
+            steps.append(
+                f"Key phrases combined into: {pair_statement}, giving me sentence-level intent."
+            )
+        if understanding and understanding.command_clauses:
+            steps.append(
+                "Detected direct requests such as "
+                + "; ".join(understanding.command_clauses[:2])
+                + " and will respond to each explicitly."
+            )
+        if understanding and understanding.coding_terms:
+            coding_focus = ", ".join(sorted(set(understanding.coding_terms))[:4])
+            steps.append(
+                "Coding reasoning engaged: "
+                + coding_focus
+                + " guides the implementation heuristics."
+            )
+        if gap_report:
+            unresolved = gap_report.unresolved_terms()
+            if unresolved:
+                gap_text = ", ".join(unresolved[:3])
+                steps.append(
+                    "Launching autonomous vocabulary research for: " + gap_text + "."
+                )
+            resolved = gap_report.resolved_terms()
+            if resolved:
+                resolved_text = ", ".join(resolved[:3])
+                steps.append(
+                    "Recently reinforced language now includes "
+                    + resolved_text
+                    + "."
+                )
+        if plan:
+            steps.append(
+                "Synthetic thought engine recommended "
+                + ", ".join(trace.module for trace in plan.module_traces[:3])
+                + " to keep reasoning exhaustive."
+            )
+            if plan.outline:
+                steps.append(plan.outline[0])
+        if orchestration:
+            steps.append(
+                "Orchestrator confidence "
+                + f"{orchestration.confidence:.2f} with {len(orchestration.citations)} citations"
+            )
+            if orchestration.coherence:
+                steps.append(
+                    "Entity grid continuity score "
+                    + f"{orchestration.coherence.score:.2f}."
+                )
+        if profile:
+            biases = profile.bias_snapshot()
+            if biases:
+                formatted = ", ".join(f"{domain}×{weight:.2f}" for domain, weight in biases[:3])
+                steps.append(
+                    "Reasoning profile currently emphasises "
+                    + formatted
+                    + ", ensuring the focus shifts with new evidence."
+                )
+            recent_training = profile.recent_training(1)
+            if recent_training:
+                steps.append(
+                    "Latest training influence: " + recent_training[-1]
+                )
+        reasoning_tracks = [entry for entry in related if entry.topic.startswith("reasoning::")]
+        if reasoning_tracks:
+            focus = reasoning_tracks[0].topic.split("::")[1:4]
+            steps.append(
+                "Following reasoning blueprint "
+                + " → ".join(part.replace("_", " ") for part in focus)
+                + " to keep thoughts organised."
+            )
+        interaction_examples = [entry for entry in related if entry.topic.startswith("interaction::")]
+        if interaction_examples:
+            steps.append("Referencing interaction transcripts so tone and pacing mirror successful dialogues.")
+        if any(entry.provenance == "speech_practice" for entry in related):
+            steps.append("Recent speech rehearsals give me phrasing patterns that keep the reply natural.")
+        if personality.curiosity < 0.4:
+            steps.append("I'll raise curiosity slightly so we test assumptions instead of echoing keywords.")
+        if not reasoning_tracks:
+            steps.append(
+                "I'll synthesise a mini plan: clarify intent, surface relevant knowledge, weigh trade-offs, and confirm next steps."
+            )
+        if understanding and understanding.urgency:
+            steps.append("User phrasing signalled urgency, so I'll move faster on verification.")
+        narrative = " ".join(steps)
+        conclusion = "That plan shapes a grounded response that stays relevant to what you asked."
+        return [AgentResponse(self.name, f"{narrative} {conclusion}")]
+
+
+class SyntheticAgent(Agent):
+    name = "synthetic"
+
+    def generate(
+        self,
+        prompt: str,
+        personality: PersonalityState,
+        memory: MemoryWeb,
+        related: List[MemoryEntry],
+        context: Optional[Dict[str, object]] = None,
+    ) -> List[AgentResponse]:
+        if not context:
+            return [AgentResponse(self.name, "Synthetic modules idle; no context supplied.")]
+        plan = context.get("synthetic_plan")
+        if not isinstance(plan, SyntheticThoughtPlan):
+            return [AgentResponse(self.name, "Synthetic plan not available for this turn.")]
+        headline = plan.summary()
+        outline = plan.outline[:2]
+        detail = " ".join(outline) if outline else "Preparing baseline outline."
+        harvest_hint = (
+            f" Target web harvest: {', '.join(plan.harvest_queries[:2])}."
+            if plan.harvest_queries
+            else ""
+        )
+        return [
+            AgentResponse(
+                self.name,
+                f"{headline}. {detail}{harvest_hint}",
+            )
+        ]
+
+
+def _keywords(text: str) -> List[str]:
+    parts = [token.strip(".,!?;:") for token in text.split() if len(token) > 3]
+    seen = []
+    for part in parts:
+        if part not in seen:
+            seen.append(part)
+    return seen
+
+
+def _looks_like_greeting(text: str) -> bool:
+    greetings = {"hello", "hi", "hey", "greetings", "good morning", "good evening"}
+    return any(text.startswith(greet) for greet in greetings)
+
+
+def _summarize_related_memories(related: List[MemoryEntry]) -> str:
+    domains = {}
+    snippets: List[str] = []
+    for entry in related[:4]:
+        head = entry.topic.split("::")[0]
+        domains[head] = domains.get(head, 0) + 1
+        snippet = entry.content
+        if len(snippet) > 90:
+            snippet = snippet[:87] + "..."
+        snippets.append(f"{head} → {snippet}")
+    focus_domains = ", ".join(f"{domain}×{count}" for domain, count in sorted(domains.items(), key=lambda item: item[1], reverse=True))
+    evidence = "; ".join(snippets)
+    return f"Mapped {len(related)} supporting memories ({focus_domains}) and will weave in evidence such as {evidence}."
+
+
+class Cortex:
+    """Coordinates a set of cooperative agents."""
+
+    def __init__(
+        self,
+        personality: PersonalityState,
+        forge: Forge,
+        memory: MemoryWeb,
+        reflection: ReflectionEngine,
+        web_growth: WebGrowthSystem,
+        synthetic: SyntheticThoughtEngine,
+        reasoning: ReasoningProfile,
+        orchestrator: ReasoningOrchestrator,
+    ) -> None:
+        self._personality = personality
+        self._forge = forge
+        self._memory = memory
+        self._reflection = reflection
+        self._web_growth = web_growth
+        self._synthetic = synthetic
+        self._reasoning = reasoning
+        self._orchestrator = orchestrator
+        self._agents: List[Agent] = [
+            LogicAgent(),
+            CuriosityAgent(),
+            EthicsAgent(),
+            SyntheticAgent(),
+            ReasoningAgent(),
+        ]
+
+    def process(
+        self,
+        prompt: str,
+        understanding: Optional[MessageUnderstanding] = None,
+        plan: Optional[SyntheticThoughtPlan] = None,
+        gap_report: Optional[KnowledgeGapReport] = None,
+    ) -> "CortexResult":
+        responses: List[AgentResponse] = []
+        query = prompt
+        if understanding:
+            focus_text = understanding.focus_text()
+            if focus_text:
+                query = f"{prompt} || {focus_text}"
+        related = self._memory.search(query, limit=7)
+        related = self._reasoning.refine_related(prompt, understanding, related)
+        generated_plan = plan
+        if generated_plan is None and understanding is not None:
+            generated_plan = self._synthetic.plan(prompt, understanding, self._memory)
+        plan = generated_plan
+        if len(related) < 3:
+            focus = understanding.focus_text() if understanding else prompt
+            report = self._web_growth.autonomous_training(focus, batch_size=10)
+            self._memory.record(
+                "cortex::auto_refresh",
+                report.render(),
+                0.66,
+                "autonomous_web",
+            )
+            self._reasoning.observe_training(report)
+            related = self._memory.search(query, limit=9)
+            related = self._reasoning.refine_related(prompt, understanding, related)
+        context: Dict[str, object] = {}
+        if understanding:
+            context["understanding"] = understanding
+        if plan:
+            context["synthetic_plan"] = plan
+        if gap_report:
+            context["gap_report"] = gap_report
+        context["reasoning_profile"] = self._reasoning
+        orchestration: Optional[OrchestratorResult] = None
+        try:
+            focus_terms = understanding.focus_terms if understanding else []
+            memory_topics = [entry.topic for entry in related]
+            orchestration = self._orchestrator.execute(
+                prompt,
+                context_terms=focus_terms,
+                memory_topics=memory_topics,
+                understanding_summary=understanding.summary() if understanding else None,
+            )
+            context["orchestration"] = orchestration
+            self._memory.record(
+                "orchestrator::draft",
+                orchestration.final_text,
+                max(0.5, orchestration.confidence),
+                "orchestrator",
+            )
+            if orchestration.trace_path:
+                self._memory.record(
+                    "orchestrator::trace",
+                    orchestration.trace_path,
+                    0.7,
+                    "orchestrator",
+                )
+        except Exception as error:  # pragma: no cover - defensive guard
+            self._memory.record(
+                "orchestrator::error",
+                f"{type(error).__name__}: {error}",
+                0.2,
+                "orchestrator",
+            )
+            orchestration = None
+        for agent in self._agents:
+            responses.extend(
+                agent.generate(
+                    prompt,
+                    self._personality,
+                    self._memory,
+                    related,
+                    context,
+                )
+            )
+        insights = [response.insight for response in responses]
+        experiments = self._forge.run(insights)
+        reflection = self._reflection.review(insights)
+        self._memory.record("prompt", prompt, 0.6, "cortex")
+        policy = self._web_growth.describe_policy()
+        reasoning_summary = self._summarize_reasoning(
+            prompt,
+            related,
+            experiments,
+            understanding,
+            plan,
+            gap_report,
+            orchestration,
+        )
+        return CortexResult(
+            responses,
+            experiments,
+            reflection,
+            policy,
+            related,
+            reasoning_summary,
+            orchestration=orchestration,
+        )
+
+    def _summarize_reasoning(
+        self,
+        prompt: str,
+        related: List[MemoryEntry],
+        experiments: List,
+        understanding: Optional[MessageUnderstanding] = None,
+        plan: Optional[SyntheticThoughtPlan] = None,
+        gaps: Optional[KnowledgeGapReport] = None,
+        orchestration: Optional[OrchestratorResult] = None,
+    ) -> str:
+        return self._reasoning.compose_summary(
+            prompt,
+            related,
+            experiments,
+            understanding,
+            plan,
+            gaps,
+            orchestration,
+        )
+
+    def register_finding(self, finding: WebFinding) -> int:
+        return self._web_growth.integrate([finding])
+
+
+@dataclass
+class CortexResult:
+    responses: List[AgentResponse]
+    experiments: List
+    reflection: ReflectionReport
+    policy_summary: str
+    related_memories: List[MemoryEntry]
+    reasoning_summary: str
+    orchestration: Optional[OrchestratorResult] = None
+
+    def render(self) -> str:
+        lines = ["Agent insights:"]
+        for response in self.responses:
+            lines.append(f"- {response.agent}: {response.insight}")
+        lines.append("\nForge results:")
+        for result in self.experiments:
+            status = "success" if result.success else "failure"
+            lines.append(f"- {result.description} => {status} ({result.notes})")
+        lines.append("\nReflection:")
+        lines.append(f"- {self.reflection.rationale}")
+        lines.append("\nWeb policy:")
+        lines.append(f"- {self.policy_summary}")
+        lines.append("\nReasoning summary:")
+        if self.reasoning_summary:
+            formatted = self.reasoning_summary.replace("\n\n", "\n  \n  ").replace("\n", "\n  ")
+            lines.append(f"- {formatted}")
+        else:
+            lines.append("- (no reasoning summary recorded)")
+        if self.related_memories:
+            lines.append("\nEvidence snippets:")
+            for entry in self.related_memories[:5]:
+                domain, _, aspect = entry.topic.partition("::")
+                lines.append(
+                    f"- {domain} / {aspect}: confidence {entry.confidence:.2f}"
+                    f" (stored {entry.timestamp.isoformat()}Z)"
+                )
+        if self.orchestration:
+            lines.append("\nOrchestrator summary:")
+            coherence_value = (
+                f"{self.orchestration.coherence.score:.2f}"
+                if self.orchestration.coherence
+                else "n/a"
+            )
+            lines.append(
+                f"- Confidence {self.orchestration.confidence:.2f}; coherence {coherence_value}"
+            )
+            if self.orchestration.citations:
+                lines.append(
+                    "- Citations: " + ", ".join(self.orchestration.citations[:5])
+                )
+        return "\n".join(lines)

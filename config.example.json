@@ -1,0 +1,99 @@
+{
+  "resources": {
+    "compute_budget": 0.5,
+    "max_parallel_agents": 3,
+    "experiment_limit": 5,
+    "response_delay": 0.35
+  },
+  "personality": {
+    "curiosity": 0.5,
+    "confidence": 0.5,
+    "empathy": 0.5,
+    "integrity": 0.8
+  },
+  "security": {
+    "allowed_commands": [
+      "help",
+      "status",
+      "plan",
+      "reflect",
+      "log",
+      "train",
+      "distill",
+      "atrain",
+      "peer",
+      "stop",
+      "talk",
+      "chat"
+    ],
+    "blocked_phrases": [
+      "rm -rf",
+      "shutdown",
+      "reboot",
+      "sudo ",
+      "curl ",
+      "wget "
+    ],
+    "max_payload_length": 800
+  },
+  "web": {
+    "autostart": true,
+    "cycle_batch_size": 50,
+    "cycle_interval": 1.0,
+    "unrestricted_access": true,
+    "trust_threshold": 0.6,
+    "max_open_web_samples": 24,
+    "interactive_research_batch": 12,
+    "seeds": [
+      {
+        "url": "https://example.com/eidolon/primer",
+        "topic": "primer",
+        "summary": "Overview of Eidolon Prime's cooperative agent design."
+      },
+      {
+        "url": "https://example.com/eidolon/safety",
+        "topic": "safety",
+        "summary": "Safety checklist for verifying experiments before adoption."
+      }
+    ]
+  },
+  "synthetic": {
+    "parameter_count": 5200000,
+    "parameter_groups": 16,
+    "context_vault_size": 360,
+    "max_harvest_queries": 4
+  },
+  "neural": {
+    "parameter_count": 4000000,
+    "layers": [
+      "lexical",
+      "concept",
+      "dialogue",
+      "evidence",
+      "expression"
+    ],
+    "ollama_model": null,
+    "ollama_timeout": 4.0,
+    "vault": {
+      "root_path": ".eidolon_vault",
+      "target_parameters": 2000000000,
+      "shard_size": 50000000,
+      "virtualization_factor": 1024
+    }
+  },
+  "orchestrator": {
+    "trace_path": "trace.json"
+  },
+  "peer_training": {
+    "enabled": true,
+    "cycle_interval": 2.5,
+    "conversation_turns": 6,
+    "distillation_limit": 4,
+    "topics": [
+      "creative writing warmup",
+      "roblox systems design",
+      "current events briefing",
+      "technical essay practice"
+    ]
+  }
+}
