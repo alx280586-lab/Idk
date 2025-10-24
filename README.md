@@ -127,17 +127,37 @@ The following guide assumes you have minimal technical experience. Each step is 
    ```bash
    python -m eidolon_prime
    ```
-3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions. During this boot sequence the Web Growth System automatically crawls and stores the trusted sources you listed in `config.json`, the kernel injects a curated corpus of 1,000 foundational lessons defined in `eidolon_prime/dataset.py`, **and the autonomous trainer performs an initial crawl across Roblox documentation, core coding references, Wikipedia, and Britannica**. These combined seeds give the reasoning agents context before your first interaction.
+3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions. During this boot sequence the Web Growth System automatically crawls and stores the trusted sources you listed in `config.json`, the kernel injects a curated corpus of 1,000 foundational lessons defined in `eidolon_prime/dataset.py`, and it now loads **more than 3,500 grammar, conversation, and coding facts** from the new datastores in `eidolon_prime/curriculum.py`. Immediately afterward the autonomous trainer performs an initial crawl across hundreds of Roblox manuals, core coding references, encyclopedia articles, and experience write-ups so the reasoning agents have thousands of grounded memories before your first interaction.
 
 ### 6. Interact with the System
 1. Begin with simple requests such as `help` or `status` to explore available commands.
 2. Ask Eidolon Prime to perform tasks like generating a small script, analyzing a snippet of code, or proposing a plan for a project.
 3. Teach the engine explicitly by typing commands such as `train data-model: Document the new data validation rules`. The training ground logs your guidance, stores it in the memory web, and gently boosts the engine’s curiosity so it can build on what you taught it. Inputs that look unsafe are blocked before they reach the training subsystem.
-4. Launch autonomous learning whenever you like with `atrain` or `atrain <focus>`. This now spins up a **continuous** crawl that loops through thousands of trusted Roblox manuals, programming best-practice collections, and encyclopedia references until you issue the `stop` command. Add a focus keyword such as `atrain roblox economy` to bias the crawl toward matching topics, or trigger a single burst with `atrain once <focus>` when you only need one pass.
+4. Launch autonomous learning whenever you like with `atrain` or `atrain <focus>`. The command now drives a **layered curriculum**: it first forces the engine to master greetings and sense words, then reality concepts, then common phrases, sentence fluency, and finally advanced design knowledge. At each layer the trainer quizzes itself and will keep looping until it clears the required score. In parallel, a continuous crawl loops through more than two hundred tiered, trusted web sources until you issue the `stop` command. Add a focus keyword such as `atrain roblox economy` to bias the crawl toward matching topics, or trigger a single burst with `atrain once <focus>` when you only need one pass.
 5. Pause the autonomous crawler at any point by typing `stop`. The kernel signals the background trainer to wind down safely, joins the worker thread, and records a closing summary so you can audit what was ingested.
 6. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime now routes every message through a dedicated **Conversation Datastore** that infers intent and affect, picks the best-performing dialogue pattern, and hands a semantic frame to the new **Grammar Datastore**. The Grammar Datastore realizes the reply with active voice, varied sentence rhythm, and an explicit tie back to the training evidence the cortex surfaced.
 7. Behind the scenes the datastore tracks which tones and rhetorical structures worked, logging turn-level metrics (intent, affect, tone, structure, lexical variety, and success markers). Successful patterns are reinforced, overused ones are penalized, and autonomous training feeds in new communication techniques from PlainLanguage.gov, the UNC Writing Center, and Harvard Business Review so the engine keeps refining its conversational instincts.
 8. Each response still includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, curated evidence snippets from memory, and Reflection Engine rationale so you can inspect the entire reasoning chain.
+
+### 7a. Autonomous Curriculum Stages
+The autonomous trainer works through five explicit stages whenever `atrain` runs:
+
+1. **Lexicon foundation:** absorbs more than a thousand greetings, sense descriptors, emotions, and verb nuances, quizzing itself until it passes a confidence threshold.
+2. **Reality grounding:** studies hundreds of facts about human roles, animals, environments, and world mechanics so conversations reference how the world actually behaves.
+3. **Phrase mastery:** catalogues polite openings, clarifying prompts, and collaborative follow-ups while tracking which register (technical, conversational, supportive, analytical) best fits the moment.
+4. **Sentence fluency:** practices thousands of sentence templates that connect intents, tones, and registers into balanced replies.
+5. **Advanced reasoning:** links Roblox design patterns, coding heuristics, and empathy cues so the final responses synthesise evidence instead of echoing raw text.
+
+At every stage the trainer logs quiz scores, advances only after clearing the threshold, and keeps looping until you stop the process manually.
+
+### 7b. Foundational Datastores
+Beyond the seed corpus, the curriculum loads several large, auditable knowledge banks during bootstrap:
+
+- **Grammar datastore:** ~1,500 entries covering tense/mood/voice combinations, clause connectors, punctuation purposes, and agreement checks.
+- **Conversation datastore:** ~1,200 contextual guidelines that align intents, affects, tones, and collaboration contexts plus structured follow-up moves.
+- **Coding datastore:** ~800 patterns mixing languages, domains, frameworks, paradigms, and quality focuses so reasoning agents can justify advice with specific engineering practices.
+
+These entries live in the memory web with provenance tags so you can trace every conversational turn back to transparent knowledge atoms.
 
 ### 7. Review Reasoning Trails
 1. During a session you can type `status` at any time to inspect the live personality vectors and a summary of recorded memories.

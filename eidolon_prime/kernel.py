@@ -17,6 +17,7 @@ from .web_growth import WebGrowthSystem, WebFinding, AutoTrainingReport
 from .conversation import ConversationDatastore, ConversationPattern
 from .language import LanguageEngine, SemanticFrame
 from .dataset import load_seed_training_corpus
+from .curriculum import load_foundational_datastores
 
 
 @dataclass
@@ -407,8 +408,18 @@ class Kernel:
 
         if not self._seed_initialized:
             seeded = load_seed_training_corpus(self._memory)
+            foundations = load_foundational_datastores(self._memory)
             if seeded:
                 self._personality.adjust(confidence=0.08, curiosity=0.05, integrity=0.03)
+            if foundations:
+                total = sum(foundations.values())
+                self._personality.adjust(confidence=0.04, empathy=0.03)
+                self._memory.record(
+                    "curriculum::foundation",
+                    f"Loaded foundational datasets: {foundations} (total {total}).",
+                    0.82,
+                    "system",
+                )
             self._seed_initialized = True
         if not self._autonomous_bootstrap_complete:
             report = self.autonomous_train()
