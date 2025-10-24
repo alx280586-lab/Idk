@@ -6,7 +6,7 @@ import threading
 import time
 import webbrowser
 
-from luau_lab import load_config
+from luau_lab import RetrievalClient, load_config
 from luau_lab.training import TrainingSuite
 from web_server import app
 
@@ -37,7 +37,8 @@ def main() -> None:
 
     if args.train:
         config = load_config()
-        suite = TrainingSuite(config)
+        retriever = RetrievalClient(config.allowed_sources)
+        suite = TrainingSuite(config, retriever=retriever)
         summary = suite.run_all()
         print("Training summary:")
         for key, value in summary.items():

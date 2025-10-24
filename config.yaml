@@ -12,3 +12,11 @@ training:
   tests_dir: "data/tests"
   persona_file: "persona.yaml"
   heuristics_file: "heuristics.yaml"
+  doc_queries:
+    - "spawn"
+    - "RemoteEvent"
+    - "PathfindingService"
+  docs_cache_dir: "data/docs_cache"
+docs:
+  queries:
+    - "CollectionService"

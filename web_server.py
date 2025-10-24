@@ -12,9 +12,9 @@ from luau_lab.retrieval import RetrievalClient
 app = Flask(__name__)
 
 _config = load_config()
-_trainer = TrainingSuite(_config)
-_synthesizer = LuauSynthesizer(_trainer.heuristics)
 _retriever = RetrievalClient(_config.allowed_sources)
+_trainer = TrainingSuite(_config, retriever=_retriever)
+_synthesizer = LuauSynthesizer(_trainer.heuristics)
 _engine = DialogueEngine(
     config=_config,
     synthesizer=_synthesizer,

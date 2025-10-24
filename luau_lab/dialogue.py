@@ -62,11 +62,20 @@ class DialogueEngine:
 
         if "train" in lowered:
             summary = self.trainer.run_all()
+            docs_summary = summary.get("docs", {})
+            snippet_count = 0
+            for entries in docs_summary.values():
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        snippets = entry.get("snippets")
+                        if isinstance(snippets, list):
+                            snippet_count += len(snippets)
             return (
-                "Training complete. Loaded examples: {count}. Updated naming style to {style}."
+                "Training complete. Loaded examples: {count}. Updated naming style to {style}. Harvested {snippets} doc snippets."
             ).format(
                 count=len(summary.get("examples", [])),
                 style=summary.get("heuristics", {}).get("naming", {}).get("function_case", "camel"),
+                snippets=snippet_count,
             )
 
         if lowered.startswith("doc ") or lowered.startswith("fetch "):

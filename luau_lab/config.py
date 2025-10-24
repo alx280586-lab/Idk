@@ -14,6 +14,7 @@ class LabConfig:
     allowed_sources: List[str] = field(default_factory=list)
     style: Dict[str, Any] = field(default_factory=dict)
     training: Dict[str, Any] = field(default_factory=dict)
+    docs: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LabConfig":
@@ -21,6 +22,7 @@ class LabConfig:
             allowed_sources=data.get("allowed_sources", []),
             style=data.get("style", {}),
             training=data.get("training", {}),
+            docs=data.get("docs", {}),
         )
 
 
@@ -42,6 +44,7 @@ def save_config(config: LabConfig, path: str = "config.yaml") -> None:
                 "allowed_sources": config.allowed_sources,
                 "style": config.style,
                 "training": config.training,
+                "docs": config.docs,
             },
             handle,
             sort_keys=False,

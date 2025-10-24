@@ -1,14 +1,21 @@
 """CLI entry-point for the Luau Synthesis Lab chatbot."""
 from __future__ import annotations
 
-from luau_lab import DialogueEngine, LabConfig, LuauSynthesizer, RetrievalClient, TrainingSuite, load_config
+from luau_lab import (
+    DialogueEngine,
+    LabConfig,
+    LuauSynthesizer,
+    RetrievalClient,
+    TrainingSuite,
+    load_config,
+)
 
 
 def bootstrap_engine() -> DialogueEngine:
     config = load_config()
-    trainer = TrainingSuite(config)
-    synthesizer = LuauSynthesizer(trainer.heuristics)
     retriever = RetrievalClient(config.allowed_sources)
+    trainer = TrainingSuite(config, retriever=retriever)
+    synthesizer = LuauSynthesizer(trainer.heuristics)
     engine = DialogueEngine(
         config=config,
         synthesizer=synthesizer,
