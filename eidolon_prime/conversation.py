@@ -100,6 +100,14 @@ _DEFAULT_PATTERNS: Tuple[ConversationPattern, ...] = (
         register="dialogue_support",
         success_score_by_context={"global": 0.62},
     ),
+    ConversationPattern(
+        pattern_id="code.review.sequence",
+        intent="problem_solving",
+        tone="steady",
+        structure="diagnose→code→next-step",
+        register="engineering",
+        success_score_by_context={"global": 0.64},
+    ),
 )
 
 

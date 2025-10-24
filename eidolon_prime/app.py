@@ -21,6 +21,7 @@ from .speech import SpeechAcademy
 from .comprehension import MessageComprehender
 from .synthetic import SyntheticThoughtEngine
 from .reasoning import ReasoningProfile
+from .knowledge import KnowledgeGapMonitor
 
 
 @dataclass
@@ -63,6 +64,7 @@ class EidolonPrimeApp:
         comprehension = MessageComprehender()
         speech_academy = SpeechAcademy()
         reasoning = ReasoningProfile()
+        knowledge = KnowledgeGapMonitor()
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -88,6 +90,7 @@ class EidolonPrimeApp:
             comprehension=comprehension,
             synthetic=synthetic,
             reasoning=reasoning,
+            knowledge=knowledge,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)

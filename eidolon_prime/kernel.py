@@ -23,6 +23,7 @@ from .curriculum import load_foundational_datastores
 from .comprehension import MessageComprehender, MessageUnderstanding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 from .reasoning import ReasoningProfile
+from .knowledge import KnowledgeGapMonitor
 
 
 @dataclass
@@ -95,6 +96,7 @@ class Kernel:
         comprehension: MessageComprehender,
         synthetic: SyntheticThoughtEngine,
         reasoning: ReasoningProfile,
+        knowledge: KnowledgeGapMonitor,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -111,6 +113,7 @@ class Kernel:
         self._comprehension = comprehension
         self._synthetic = synthetic
         self._reasoning = reasoning
+        self._knowledge = knowledge
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -151,10 +154,34 @@ class Kernel:
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
         understanding = self._comprehension.analyse(message)
+        gap_report = self._knowledge.evaluate(understanding, self._memory)
+        understanding.unknown_terms = gap_report.unresolved_terms()
+        understanding.researched_terms = gap_report.resolved_terms()
+        understanding.coding_terms = list(dict.fromkeys(gap_report.coding_terms))
+        gap_resolution_notes: List[str] = []
+        unresolved_gaps = gap_report.unresolved()
+        max_gap_checks = min(3, len(unresolved_gaps))
+        for gap in unresolved_gaps[:max_gap_checks]:
+            gap_report.triggered_queries.append(gap.term)
+            report = self.autonomous_train(gap.term, batch_size=6)
+            resolved_gap = self._knowledge.register_resolution(gap, report, self._memory)
+            if resolved_gap.resolved:
+                understanding.researched_terms.append(resolved_gap.term)
+                self._reasoning.register_gap_resolution(
+                    resolved_gap.term, resolved_gap.sources
+                )
+                gap_resolution_notes.append(resolved_gap.summary)
+        understanding.unknown_terms = gap_report.unresolved_terms()
+        understanding.researched_terms = list(
+            dict.fromkeys(gap_report.resolved_terms())
+        )
         self._speech.observe_message(message, self._memory)
         plan = self._synthetic.plan(message, understanding, self._memory)
         analysis = self._cortex.process(
-            message, understanding=understanding, plan=plan
+            message,
+            understanding=understanding,
+            plan=plan,
+            gap_report=gap_report,
         )
         refresh_report: AutoTrainingReport | None = None
         if self._should_refresh_context(message, analysis, understanding):
@@ -168,7 +195,10 @@ class Kernel:
             )
             plan = self._synthetic.plan(message, understanding, self._memory)
             analysis = self._cortex.process(
-                message, understanding=understanding, plan=plan
+                message,
+                understanding=understanding,
+                plan=plan,
+                gap_report=gap_report,
             )
             analysis.reasoning_summary = (
                 analysis.reasoning_summary
@@ -186,13 +216,40 @@ class Kernel:
         if harvested_reports:
             plan = self._synthetic.plan(message, understanding, self._memory)
             analysis = self._cortex.process(
-                message, understanding=understanding, plan=plan
+                message,
+                understanding=understanding,
+                plan=plan,
+                gap_report=gap_report,
+            )
+        if gap_report.resolved_terms():
+            reinforcement = ", ".join(gap_report.resolved_terms()[:4])
+            addition = (
+                "Vocabulary reinforcement completed: "
+                + reinforcement
+                + "."
+            )
+            if analysis.reasoning_summary:
+                analysis.reasoning_summary += "\n\n" + addition
+            else:
+                analysis.reasoning_summary = addition
+        if gap_resolution_notes:
+            combined = " | ".join(gap_resolution_notes[:3])
+            self._memory.record(
+                "conversation::gap_resolution",
+                combined,
+                0.68,
+                "knowledge_gap",
             )
             analysis.reasoning_summary += (
                 f" Synthetic plan harvested {len(harvested_reports)} extra knowledge batches."
             )
         intent, affect = self._infer_intent_and_affect(message, understanding)
         pattern = self._conversation.select_pattern(intent, affect)
+        if understanding.coding_terms and pattern.structure != "diagnose→code→next-step":
+            for candidate in self._conversation.all_patterns():
+                if candidate.pattern_id == "code.review.sequence":
+                    pattern = candidate
+                    break
         self._conversation.ingest_highlights(
             (
                 f"conversation::focus::{index}",
@@ -204,10 +261,13 @@ class Kernel:
         frame = self._build_semantic_frame(
             message, intent, affect, analysis, pattern, understanding, plan
         )
+        preferred_register = (
+            "engineering" if understanding.coding_terms else pattern.register
+        )
         reply_body, lexical = self._language.compose_reply(
             frame,
             pattern.structure,
-            pattern.register,
+            preferred_register,
             self._personality.describe(),
         )
         tone_header = self._describe_tone(pattern.tone)
@@ -423,6 +483,8 @@ class Kernel:
         elif any(keyword in lowered for keyword in ("motivate", "inspire", "story")):
             intent = "motivate"
         elif understanding.command_clauses:
+            intent = "problem_solving"
+        if understanding.coding_terms:
             intent = "problem_solving"
         affect = understanding.affect or self._compute_user_affect(lowered)
         if understanding.urgency and affect == "neutral":
@@ -705,6 +767,7 @@ class Kernel:
                     "speech_practice",
                 )
             self._seed_initialized = True
+            self._knowledge.sync_with_memory(self._memory)
         if not self._autonomous_bootstrap_complete:
             report = self.autonomous_train()
             if report.imported:

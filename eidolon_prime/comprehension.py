@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Iterable, List
 
 _STOPWORDS = {
@@ -77,6 +77,9 @@ class MessageUnderstanding:
     affect: str
     urgency: bool
     command_clauses: List[str]
+    unknown_terms: List[str] = field(default_factory=list)
+    researched_terms: List[str] = field(default_factory=list)
+    coding_terms: List[str] = field(default_factory=list)
 
     def focus_text(self) -> str:
         """Return a condensed representation of the user's focus."""
@@ -101,9 +104,12 @@ class MessageUnderstanding:
         affect_part = f"affect={self.affect or 'neutral'}"
         urgency_part = "urgent" if self.urgency else "steady"
         commands = ", ".join(self.command_clauses) or "none"
+        unknown = ", ".join(self.unknown_terms[:4]) or "none"
+        coding = ", ".join(self.coding_terms[:4]) or "none"
         return (
             f"Comprehension summary → {sentence_part}; {focus_part}; {pair_part};"
-            f" {affect_part}; urgency={urgency_part}; commands={commands}"
+            f" {affect_part}; urgency={urgency_part}; commands={commands};"
+            f" unknown_terms={unknown}; coding_terms={coding}"
         )
 
     def highlights(self) -> List[str]:
@@ -119,6 +125,16 @@ class MessageUnderstanding:
         if self.command_clauses:
             command = self.command_clauses[0]
             snippets.append(f"You explicitly asked me to {command}.")
+        if self.unknown_terms:
+            unknown = ", ".join(self.unknown_terms[:3])
+            snippets.append(
+                f"I noticed new concepts ({unknown}) and I'm researching them before replying."
+            )
+        if self.researched_terms:
+            researched = ", ".join(self.researched_terms[:3])
+            snippets.append(
+                f"Freshly reinforced vocabulary: {researched}."
+            )
         if not snippets:
             snippets.append("I'm digesting every word so I mirror your intent accurately.")
         return snippets

@@ -139,6 +139,19 @@ _DEFAULT_TEMPLATES: Tuple[GrammarTemplate, ...] = (
         variation_ops=("cause_effect", "highlight_decision"),
     ),
     GrammarTemplate(
+        template_id="code_review_sequence",
+        rhetorical_function="coding",
+        slots={
+            "introduction": "{opener} {topic_sentence} {tone_clause}",
+            "analysis": "{connector} {code_reasoning_sentence}",
+            "evidence": "{connector} {coding_evidence_sentence}",
+            "action": "{connector} {coding_action_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("engineering", "technical_conversational"),
+        variation_ops=("code_focus", "precision_pass"),
+    ),
+    GrammarTemplate(
         template_id="dialogue_loop",
         rhetorical_function="conversation",
         slots={
@@ -218,6 +231,24 @@ _DEFAULT_REGISTERS: Tuple[RegisterPack, ...] = (
         ),
         hedges=("gently", "openly", "collaboratively"),
     ),
+    RegisterPack(
+        name="engineering",
+        openers=(
+            "Let's engineer this carefully.",
+            "From an implementation point of view,",
+            "Thinking like a systems architect,",
+        ),
+        connectors=(
+            "From an implementation angle,",
+            "Code-wise,",
+            "To keep the build stable,",
+        ),
+        closings=(
+            "I'll keep refining the implementation notes with you.",
+            "Let's validate the code path together when you're ready.",
+        ),
+        hedges=("technically", "precisely", "code-wise"),
+    ),
 )
 
 
@@ -246,6 +277,8 @@ class GrammarDatastore:
             "analyse→compare→decide": "analysis_compare_decide",
             "greet→explore→respond→reflect": "dialogue_loop",
             "greet→clarify→respond→reflect": "dialogue_loop",
+            "diagnose→code→next-step": "code_review_sequence",
+            "teach→code→recap": "code_review_sequence",
         }
         template_id = lookup.get(structure, "acknowledge_analyse")
         return self._templates[template_id]
@@ -299,6 +332,9 @@ class GrammarDatastore:
         reflection_sentence = self._compose_reflection_sentence(frame)
         closing_sentence = self._compose_closing_sentence(frame, closing)
         tone_clause = f"I'm keeping the tone {frame.emotional_tone}."
+        code_reasoning_sentence = self._compose_code_reasoning_sentence(frame, hedge)
+        coding_evidence_sentence = self._compose_coding_evidence_sentence(frame)
+        coding_action_sentence = self._compose_coding_action_sentence(frame)
         return {
             "opener": opener,
             "connector": connector,
@@ -318,6 +354,9 @@ class GrammarDatastore:
             "comparison_sentence": comparison_sentence,
             "decision_sentence": decision_sentence,
             "reflection_sentence": reflection_sentence,
+            "code_reasoning_sentence": code_reasoning_sentence,
+            "coding_evidence_sentence": coding_evidence_sentence,
+            "coding_action_sentence": coding_action_sentence,
         }
 
     def _compose_analysis_sentence(self, frame: SemanticFrame, hedge: str) -> str:
@@ -336,6 +375,30 @@ class GrammarDatastore:
         if frame.actions:
             return f"Next, I recommend {self._tidy(frame.actions[0])}."
         return "We can collect more data before committing to a move."
+
+    def _compose_code_reasoning_sentence(
+        self, frame: SemanticFrame, hedge: str
+    ) -> str:
+        prefix = f"{hedge.title()} " if hedge else "Technically, "
+        if frame.key_points:
+            anchor = self._tidy(frame.key_points[0])
+            return f"{prefix}from a coding perspective the logic centres on {anchor}."
+        return (
+            f"{prefix}from a coding perspective I decompose the idea into reusable functions "
+            "before writing syntax."
+        )
+
+    def _compose_coding_evidence_sentence(self, frame: SemanticFrame) -> str:
+        if frame.evidence:
+            proof = self._tidy(frame.evidence[0])
+            return f"Implementation references include {proof}."
+        return "I'll cross-check trusted repositories and specifications to anchor the implementation."
+
+    def _compose_coding_action_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            step = self._tidy(frame.actions[0])
+            return f"I'll translate that into code by {step}."
+        return "I'll sketch function signatures and test cases so the code path is well reasoned."
 
     def _compose_diagnosis_sentence(
         self, frame: SemanticFrame, hedge: str
@@ -451,6 +514,10 @@ class LanguageEngine:
                 updated = self._op_invite_followup(updated)
             elif operation == "amplify_emotion":
                 updated = self._op_amplify_emotion(updated)
+            elif operation == "code_focus":
+                updated = self._op_code_focus(updated)
+            elif operation == "precision_pass":
+                updated = self._op_precision_pass(updated)
         return updated
 
     def _structure_paragraphs(
@@ -500,6 +567,7 @@ class LanguageEngine:
             "explore": "analysis",
             "respond": "analysis",
             "greet": "introduction",
+            "code": "analysis",
         }
         return mapping.get(segment, "analysis")
 
@@ -537,6 +605,20 @@ class LanguageEngine:
         updated = dict(slots)
         if "analysis" in updated:
             updated["analysis"] += " That momentum is worth leaning into."
+        return updated
+
+    def _op_code_focus(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        if "analysis" in updated:
+            updated["analysis"] += " I line up pseudo-code so each step is explicit."
+        if "evidence" in updated:
+            updated["evidence"] += " These references stem from the coding datastore I expanded during atrain."
+        return updated
+
+    def _op_precision_pass(self, slots: Dict[str, str]) -> Dict[str, str]:
+        updated = dict(slots)
+        if "closing" in updated:
+            updated["closing"] += " I'll circle back to re-verify terminology and grammar after this exchange."
         return updated
 
     def _score_candidate(self, text: str) -> float:

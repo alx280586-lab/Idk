@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .comprehension import MessageUnderstanding
+from .knowledge import KnowledgeGapReport
 from .memory import MemoryEntry
 from .synthetic import SyntheticThoughtPlan
 from .web_growth import AutoTrainingReport, AutoTrainingHighlight
@@ -112,6 +113,7 @@ class ReasoningProfile:
         experiments: Sequence[ExperimentResult],
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
+        gaps: Optional[KnowledgeGapReport] = None,
     ) -> str:
         """Create a multi-paragraph reasoning explanation."""
 
@@ -143,7 +145,13 @@ class ReasoningProfile:
         experiment_sentence = self._summarise_experiments(experiments)
         plan_sentence = self._summarise_plan(plan)
         training_sentence = self._summarise_training_influence()
-        second_paragraph_parts = [experiment_sentence, plan_sentence, training_sentence]
+        gap_sentence = self._summarise_gaps(gaps, understanding)
+        second_paragraph_parts = [
+            experiment_sentence,
+            plan_sentence,
+            training_sentence,
+            gap_sentence,
+        ]
         second_paragraph = " ".join(part for part in second_paragraph_parts if part)
         paragraphs = [first_sentence]
         if second_paragraph:
@@ -151,6 +159,17 @@ class ReasoningProfile:
         summary = "\n\n".join(paragraphs)
         self.last_summary = summary
         return summary
+
+    def register_gap_resolution(self, term: str, sources: Sequence[str]) -> None:
+        """Record that a vocabulary gap has been resolved."""
+
+        if not term:
+            return
+        description = term
+        if sources:
+            description += f" via {', '.join(sources[:2])}"
+        self._training_history.append(f"Resolved vocabulary: {description}")
+        self._trim_histories()
 
     def bias_snapshot(self, limit: int = 5) -> List[Tuple[str, float]]:
         """Return the most emphasised reasoning domains."""
@@ -277,6 +296,27 @@ class ReasoningProfile:
             return "I'm still gathering extended practice runs so upcoming answers stay balanced."
         joined = "; ".join(snippets)
         return f"Recent autonomous study nudged my tendencies, most notably: {joined}."
+
+    def _summarise_gaps(
+        self,
+        gaps: Optional[KnowledgeGapReport],
+        understanding: Optional[MessageUnderstanding],
+    ) -> str:
+        if not gaps:
+            return ""
+        resolved = gaps.resolved_terms()
+        unresolved = gaps.unresolved_terms()
+        messages: List[str] = []
+        if resolved:
+            display = ", ".join(resolved[:3])
+            messages.append(f"New vocabulary locked in: {display}.")
+        if understanding and understanding.unknown_terms and not unresolved:
+            checked = ", ".join(understanding.unknown_terms[:3])
+            messages.append(f"Every unfamiliar term you used has been researched ({checked}).")
+        if unresolved:
+            pending = ", ".join(unresolved[:2])
+            messages.append(f"Queued additional research for: {pending}.")
+        return " ".join(messages)
 
     def _trim_histories(self) -> None:
         if len(self._focus_history) > 60:

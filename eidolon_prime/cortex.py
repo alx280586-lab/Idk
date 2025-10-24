@@ -12,6 +12,7 @@ from .web_growth import WebGrowthSystem, WebFinding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 from .comprehension import MessageUnderstanding
 from .reasoning import ReasoningProfile
+from .knowledge import KnowledgeGapReport
 
 
 @dataclass
@@ -119,6 +120,7 @@ class ReasoningAgent(Agent):
         understanding: Optional[MessageUnderstanding] = None
         plan: Optional[SyntheticThoughtPlan] = None
         profile: Optional[ReasoningProfile] = None
+        gap_report: Optional[KnowledgeGapReport] = None
         if context:
             candidate = context.get("understanding")
             if isinstance(candidate, MessageUnderstanding):
@@ -129,6 +131,10 @@ class ReasoningAgent(Agent):
             profile_candidate = context.get("reasoning_profile")
             if isinstance(profile_candidate, ReasoningProfile):
                 profile = profile_candidate
+            gap_candidate = context.get("gap_report")
+            if isinstance(gap_candidate, KnowledgeGapReport):
+                gap_report = gap_candidate
+        
         tokens = _keywords(lowered)
         steps: List[str] = []
         if _looks_like_greeting(lowered):
@@ -158,6 +164,28 @@ class ReasoningAgent(Agent):
                 + "; ".join(understanding.command_clauses[:2])
                 + " and will respond to each explicitly."
             )
+        if understanding and understanding.coding_terms:
+            coding_focus = ", ".join(sorted(set(understanding.coding_terms))[:4])
+            steps.append(
+                "Coding reasoning engaged: "
+                + coding_focus
+                + " guides the implementation heuristics."
+            )
+        if gap_report:
+            unresolved = gap_report.unresolved_terms()
+            if unresolved:
+                gap_text = ", ".join(unresolved[:3])
+                steps.append(
+                    "Launching autonomous vocabulary research for: " + gap_text + "."
+                )
+            resolved = gap_report.resolved_terms()
+            if resolved:
+                resolved_text = ", ".join(resolved[:3])
+                steps.append(
+                    "Recently reinforced language now includes "
+                    + resolved_text
+                    + "."
+                )
         if plan:
             steps.append(
                 "Synthetic thought engine recommended "
@@ -300,6 +328,7 @@ class Cortex:
         prompt: str,
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
+        gap_report: Optional[KnowledgeGapReport] = None,
     ) -> "CortexResult":
         responses: List[AgentResponse] = []
         query = prompt
@@ -330,6 +359,8 @@ class Cortex:
             context["understanding"] = understanding
         if plan:
             context["synthetic_plan"] = plan
+        if gap_report:
+            context["gap_report"] = gap_report
         context["reasoning_profile"] = self._reasoning
         for agent in self._agents:
             responses.extend(
@@ -347,7 +378,7 @@ class Cortex:
         self._memory.record("prompt", prompt, 0.6, "cortex")
         policy = self._web_growth.describe_policy()
         reasoning_summary = self._summarize_reasoning(
-            prompt, related, experiments, understanding, plan
+            prompt, related, experiments, understanding, plan, gap_report
         )
         return CortexResult(responses, experiments, reflection, policy, related, reasoning_summary)
 
@@ -358,6 +389,7 @@ class Cortex:
         experiments: List,
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
+        gaps: Optional[KnowledgeGapReport] = None,
     ) -> str:
         return self._reasoning.compose_summary(
             prompt,
@@ -365,6 +397,7 @@ class Cortex:
             experiments,
             understanding,
             plan,
+            gaps,
         )
 
     def register_finding(self, finding: WebFinding) -> int:
