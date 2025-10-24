@@ -755,6 +755,83 @@ def _generate_conversation_guidelines() -> List[Tuple[str, str, float, str]]:
             )
             guidelines.append((topic, content, 0.88, "conversation_foundation"))
     return guidelines
+
+
+_CULTURE_PLATFORMS = [
+    "youtube", "reddit", "podcast", "livestream", "newsletter", "forum_archive", "lecture_series", "interview_series"
+]
+_CULTURE_THEMES = [
+    "creative_writing", "roblox_engineering", "systems_design", "culture_commentary", "linguistics", "storytelling", "community_management", "ethics_discussion"
+]
+_CULTURE_STYLES = [
+    "high_energy", "reflective", "analytical", "playful", "journalistic", "tutorial"
+]
+_CULTURE_OBJECTIVES = [
+    "teach", "debate", "share_updates", "coordinate_actions"
+]
+
+
+def _generate_cross_platform_dialogues() -> List[Tuple[str, str, float, str]]:
+    """Synthetic cultural dialogue blueprints sourced from public platforms."""
+
+    dialogues: List[Tuple[str, str, float, str]] = []
+    for platform in _CULTURE_PLATFORMS:
+        for theme in _CULTURE_THEMES:
+            for style in _CULTURE_STYLES:
+                for objective in _CULTURE_OBJECTIVES:
+                    topic = f"conversation::culture::{platform}::{theme}::{style}::{objective}"
+                    content = (
+                        f"Archive transcript blueprint from {platform} sessions covering {theme.replace('_', ' ')} with a {style.replace('_', ' ')} tone. "
+                        f"Objective: {objective.replace('_', ' ')}; include turns from hosts, guests, and community Q&A to model cadence."
+                    )
+                    dialogues.append((topic, content, 0.87, "conversation_culture"))
+    return dialogues
+
+
+_DIALOGUE_TOPICS = [
+    "roblox_economy", "npc_behavior", "story_branching", "creative_workflow", "lua_patterns", "community_guidelines",
+    "current_events", "tooling_setup", "culture_analysis", "mentorship", "accessibility", "performance_tuning"
+]
+_DIALOGUE_TONES = [
+    "supportive", "direct", "curious", "celebratory", "calm", "urgent", "playful", "reflective"
+]
+_DIALOGUE_MEDIUMS = [
+    "youtube_chat", "reddit_thread", "discord_stage", "forum_post", "podcast_episode", "livestream_dm", "study_group", "office_hours", "workshop", "conference_panel", "peer_review", "code_walkthrough"
+]
+_DIALOGUE_CHALLENGES = [
+    "clarify_jargon", "summarise_steps", "balance_scope", "encourage_collaboration", "surface_tradeoffs", "share_resources",
+    "acknowledge_context", "invite_feedback", "highlight_safety", "connect_to_goals", "celebrate_progress", "outline_next_steps"
+]
+
+
+def _generate_conversation_samples() -> List[Tuple[str, str, float, str]]:
+    """Return conversation transcripts the language engine can rehearse."""
+
+    samples: List[Tuple[str, str, float, str]] = []
+    for topic_index, topic in enumerate(_DIALOGUE_TOPICS):
+        for tone_index, tone in enumerate(_DIALOGUE_TONES):
+            for medium_index, medium in enumerate(_DIALOGUE_MEDIUMS):
+                challenge = _DIALOGUE_CHALLENGES[(topic_index + tone_index + medium_index) % len(_DIALOGUE_CHALLENGES)]
+                opener = (
+                    f"User ({medium.replace('_', ' ')}): I've been digging into {topic.replace('_', ' ')} and could use a {tone} nudge."
+                )
+                reply = (
+                    f"Eidolon ({tone} tone): Let's tackle it by focusing on how to {challenge.replace('_', ' ')} while keeping the goal visible."
+                )
+                follow = (
+                    "User: That helps—what should I watch out for next?"
+                )
+                close = (
+                    f"Eidolon: Watch the edge cases, loop back after a quick experiment, and keep notes on {challenge.replace('_', ' ')}."
+                )
+                transcript = "\n".join([opener, reply, follow, close])
+                samples.append((
+                    f"conversation::sample::{topic}::{tone}::{medium}",
+                    transcript,
+                    0.86,
+                    "conversation_samples",
+                ))
+    return samples
 def _generate_coding_patterns() -> List[Tuple[str, str, float, str]]:
     languages = ["python", "lua", "javascript", "csharp", "go", "rust", "java", "swift", "kotlin", "typescript"]
     domains = [
@@ -921,6 +998,12 @@ def load_foundational_datastores(memory: MemoryWeb) -> Dict[str, int]:
     conversation_count = memory.count_by_provenance("conversation_foundation")
     if conversation_count == 0:
         loaded["conversation_foundation"] = memory.bulk_record(_generate_conversation_guidelines())
+    culture_count = memory.count_by_provenance("conversation_culture")
+    if culture_count == 0:
+        loaded["conversation_culture"] = memory.bulk_record(_generate_cross_platform_dialogues())
+    transcript_count = memory.count_by_provenance("conversation_samples")
+    if transcript_count == 0:
+        loaded["conversation_samples"] = memory.bulk_record(_generate_conversation_samples())
     coding_count = memory.count_by_provenance("coding_foundation")
     if coding_count == 0:
         loaded["coding_foundation"] = memory.bulk_record(_generate_coding_patterns())
@@ -1046,6 +1129,10 @@ _TIER_C_DOMAINS = [
     ("https://discord.com/channels", "community::chat", "Structured community chats and moderation cues."),
     ("https://medium.com", "community::essays", "Creative essay tone and storytelling cadence."),
     ("https://www.reddit.com/r/robloxdev", "community::robloxdev", "Peer conversations on Roblox development."),
+    ("https://www.youtube.com/@RobloxDev", "community::youtube_dev", "Long-form Roblox engineering discussions and AMAs."),
+    ("https://www.youtube.com/@CreativeWritingWorkshops", "community::youtube_story", "Workshop style storytelling clinics and readings."),
+    ("https://www.reddit.com/r/WritingPrompts", "community::writingprompts", "Crowdsourced creative writing dialogue and tone cues."),
+    ("https://www.reddit.com/r/explainlikeimfive", "community::eli5", "Conversational explanations tuned for clarity and empathy."),
 ]
 _EXTRA_TIER_C_DOMAINS = [
     (
@@ -1198,6 +1285,103 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 return SessionInsights
+```""",
+    ),
+    (
+        "procedural_terrain",
+        "Shapes regions using layered noise so exploration feels organic.",
+        """```lua
+local TerrainGenerator = {}
+
+local Terrain = workspace.Terrain
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Noise = require(ReplicatedStorage:WaitForChild("Noise"))
+
+function TerrainGenerator.fillRegion(region, seed)
+    math.randomseed(seed or os.time())
+    for x = region.Min.X, region.Max.X, 8 do
+        for z = region.Min.Z, region.Max.Z, 8 do
+            local sample = Noise:Perlin(x * 0.02, z * 0.02, seed)
+            local height = math.floor(sample * 30)
+            local position = Vector3.new(x, region.Min.Y + height, z)
+            Terrain:FillBlock(CFrame.new(position), Vector3.new(8, height, 8), Enum.Material.Grass)
+        end
+    end
+end
+
+return TerrainGenerator
+```""",
+    ),
+    (
+        "adaptive_ai_director",
+        "Tunes encounter pressure by monitoring player performance signals.",
+        """```lua
+local Director = {}
+
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
+
+local state = {
+    threatLevel = 0.5,
+    cooldown = 6,
+    timer = 0,
+}
+
+function Director.monitor(metrics)
+    state.threatLevel = math.clamp(metrics.averageScore / 120, 0.1, 1.6)
+    state.cooldown = math.clamp(10 - metrics.combo, 3, 12)
+end
+
+function Director.spawnWave()
+    for _, spawner in ipairs(CollectionService:GetTagged("EncounterSpawner")) do
+        local count = math.max(1, math.floor(state.threatLevel * 3))
+        spawner:Fire(count)
+    end
+end
+
+RunService.Heartbeat:Connect(function(dt)
+    state.timer += dt
+    if state.timer >= state.cooldown then
+        state.timer = 0
+        Director.spawnWave()
+    end
+end)
+
+return Director
+```""",
+    ),
+    (
+        "reputation_ledger",
+        "Persists player reputation shifts with auditable history entries.",
+        """```lua
+local ReputationLedger = {}
+
+local DataStoreService = game:GetService("DataStoreService")
+local ReputationStore = DataStoreService:GetDataStore("ReputationLedger")
+
+local function recordHistory(entry, delta, reason)
+    entry.history = entry.history or {}
+    table.insert(entry.history, {
+        at = os.time(),
+        delta = delta,
+        reason = reason,
+    })
+end
+
+function ReputationLedger.adjust(userId, delta, reason)
+    local entry = ReputationStore:GetAsync(userId) or {score = 0}
+    entry.score = entry.score + delta
+    recordHistory(entry, delta, reason)
+    ReputationStore:SetAsync(userId, entry)
+    return entry.score
+end
+
+function ReputationLedger.snapshot(userId)
+    return ReputationStore:GetAsync(userId)
+end
+
+return ReputationLedger
 ```""",
     ),
 ]

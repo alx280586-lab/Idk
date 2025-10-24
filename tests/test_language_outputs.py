@@ -49,6 +49,14 @@ class LanguageOutputTests(unittest.TestCase):
             "World briefings should present situation, evidence, implication, and outlook paragraphs.",
         )
 
+    def test_smalltalk_stays_concise_and_personal(self) -> None:
+        result = self.app.kernel.chat("Hi, how is your day going?")
+        paragraphs = self._paragraphs(result.reply)
+        self.assertLessEqual(len(paragraphs), 2, "Small talk replies should stay brief.")
+        lowered = result.reply.lower()
+        self.assertNotIn("curiosity is high", lowered)
+        self.assertNotIn("personality", lowered)
+
 
 if __name__ == "__main__":
     unittest.main()

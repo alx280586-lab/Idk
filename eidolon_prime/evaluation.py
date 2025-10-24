@@ -41,6 +41,7 @@ class EvaluationHarness:
         scores["helpfulness"] = self._helpfulness(plan, draft)
         scores["policy_risk"] = self._policy_risk(critics)
         scores["contradiction"] = self._contradiction_penalty(critics)
+        scores["benchmark_ratio"] = self._benchmark_ratio(scores)
         checklist = self._checklist(plan, draft)
         return EvaluationReport(scores=scores, checklist=checklist)
 
@@ -79,6 +80,15 @@ class EvaluationHarness:
         if not contradictions:
             return 0.0
         return min(1.0, 0.3 * len(contradictions))
+
+    def _benchmark_ratio(self, scores: Dict[str, float]) -> float:
+        """Estimate progress toward reference chat models via heuristic ratios."""
+
+        core = (scores.get("fluency", 0.0) + scores.get("coherence", 0.0) + scores.get("helpfulness", 0.0)) / 3
+        penalty = scores.get("policy_risk", 0.0) * 0.3 + scores.get("contradiction", 0.0) * 0.4
+        adjusted = max(0.0, core - penalty)
+        target = 0.8
+        return max(0.0, min(1.0, adjusted / target))
 
     def _checklist(self, plan: PlanOutline, draft: str) -> List[str]:
         checklist: List[str] = []

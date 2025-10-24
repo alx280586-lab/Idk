@@ -863,10 +863,6 @@ class LanguageEngine:
         structure_parts = structure.split("→")
         paragraphs: List[str] = []
         intro = [slots.get("introduction", "")]
-        if personality_snapshot:
-            intro.append(
-                f"I'm keeping your preferences in mind: {personality_snapshot}."
-            )
         intro_text = " ".join(part for part in intro if part).strip()
         if intro_text:
             paragraphs.append(intro_text)

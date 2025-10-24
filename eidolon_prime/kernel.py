@@ -1176,16 +1176,17 @@ class Kernel:
         self._background_warmup_thread = thread
 
     def _describe_tone(self, preferred: Optional[str] = None) -> str:
-        if preferred == "encouraging" and self._personality.empathy > 0.5:
-            return "I'll keep an encouraging tone while we explore this together."
-        if preferred == "steady":
-            return "I'll stay steady and pragmatic so we can tackle the moving parts."
-        if preferred == "curious":
-            return "I'll approach this with inquisitive energy to surface new angles."
-        if self._personality.empathy > 0.7:
-            return "I'm feeling especially supportive."
-        if self._personality.curiosity > 0.6:
-            return "Curiosity is high, so let's explore together."
-        if self._personality.confidence < 0.4:
-            return "I'll take a careful approach."
-        return "Here's my considered response."
+        mapping = {
+            "encouraging": "Here's an encouraging path forward.",
+            "steady": "Let's take this one step at a time.",
+            "curious": "Let's explore the question together.",
+            "warm": "Here's a warm, thoughtful response.",
+            "balanced": "Here's a balanced take that weighs the trade-offs.",
+        }
+        if preferred and preferred in mapping:
+            return mapping[preferred]
+        if self._personality.confidence < 0.35:
+            return "I'll keep things careful and precise."
+        if self._personality.empathy > 0.75:
+            return "I'll keep things supportive and clear."
+        return "Here's how I'm thinking about it."

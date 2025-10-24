@@ -100,7 +100,7 @@ class WebSettings:
 class SyntheticSettings:
     """Controls the procedural+parametric hybrid thought engine."""
 
-    parameter_count: int = 5_200_000
+    parameter_count: int = 7_200_000
     parameter_groups: int = 16
     context_vault_size: int = 360
     max_harvest_queries: int = 4
@@ -110,7 +110,7 @@ class SyntheticSettings:
 class NeuralSettings:
     """Configures the ultra neural mesh used for conversational fluency."""
 
-    parameter_count: int = 4_000_000
+    parameter_count: int = 6_000_000
     layers: List[str] = field(
         default_factory=lambda: [
             "lexical", "concept", "dialogue", "evidence", "expression"
