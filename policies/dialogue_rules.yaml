@@ -1,0 +1,7 @@
+rules:
+  - if: "user_praise and artifact_quality < threshold"
+    then: "request_concrete_feedback"
+  - if: "repeated_failure"
+    then: "escalate_to_self_review"
+thresholds:
+  artifact_quality: 0.6

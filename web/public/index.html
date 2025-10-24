@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grok Orbit Control Room</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #05070a;
+        --panel: #121826;
+        --accent: #f95587;
+        --accent-soft: rgba(249, 85, 135, 0.2);
+        --text: #e3e8f4;
+        --muted: #8b92a7;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at 20% 20%, rgba(249, 85, 135, 0.25), transparent 60%),
+          radial-gradient(circle at 80% 0%, rgba(45, 212, 191, 0.12), transparent 55%),
+          var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 1.5rem 2rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        font-weight: 700;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(227, 232, 244, 0.08);
+        background: rgba(5, 7, 10, 0.6);
+        backdrop-filter: blur(8px);
+      }
+      header span {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 320px 1fr 320px;
+        gap: 1.5rem;
+        padding: 2rem;
+      }
+      @media (max-width: 1200px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        background: rgba(18, 24, 38, 0.85);
+        border: 1px solid rgba(227, 232, 244, 0.08);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 20px 45px rgba(5, 7, 10, 0.35);
+      }
+      .panel h2 {
+        margin-top: 0;
+        font-size: 0.95rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      form label {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.5rem;
+        color: var(--muted);
+      }
+      form input,
+      form textarea {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        background: rgba(5, 7, 10, 0.75);
+        border: 1px solid rgba(227, 232, 244, 0.12);
+        border-radius: 12px;
+        color: inherit;
+        font-size: 0.95rem;
+      }
+      form textarea {
+        min-height: 160px;
+        resize: vertical;
+      }
+      form button {
+        margin-top: 1rem;
+        padding: 0.9rem 1.4rem;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(135deg, var(--accent), #ff8b5d);
+        color: var(--bg);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.25em;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      form button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(249, 85, 135, 0.35);
+      }
+      .log-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .log-toggle input {
+        width: auto;
+      }
+      #response-output {
+        white-space: pre-wrap;
+        background: rgba(5, 7, 10, 0.6);
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid rgba(227, 232, 244, 0.08);
+        min-height: 220px;
+      }
+      ul.timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.85rem;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      ul.timeline li {
+        border-left: 3px solid var(--accent);
+        padding-left: 1rem;
+      }
+      ul.timeline li h3 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      ul.timeline li span {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+      .knowledge-list {
+        display: grid;
+        gap: 0.6rem;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem 0.8rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      footer {
+        padding: 1rem 2rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+        border-top: 1px solid rgba(227, 232, 244, 0.08);
+        background: rgba(5, 7, 10, 0.6);
+        backdrop-filter: blur(8px);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        Grok Orbit Control Room
+        <span id="status">Initializing…</span>
+      </div>
+      <div class="pill">Scripting Specialist</div>
+    </header>
+    <main>
+      <section class="panel">
+        <h2>Mission Uplink</h2>
+        <form id="mission-form">
+          <label for="goal">Goal</label>
+          <input id="goal" name="goal" placeholder="Compose a rebellious deployment script" required />
+
+          <label for="keywords">Keywords</label>
+          <input id="keywords" name="keywords" placeholder="automation observability sarcasm" />
+
+          <div class="log-toggle">
+            <input type="checkbox" id="log-response" name="log-response" checked />
+            <label for="log-response">Log response to knowledge cache</label>
+          </div>
+
+          <button type="submit">Launch Mission</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Console Output</h2>
+        <div id="response-output">Awaiting mission upload.</div>
+      </section>
+      <section class="panel">
+        <h2>Telemetry</h2>
+        <div>
+          <h3 style="margin-bottom: 0.5rem;">Recent Missions</h3>
+          <ul class="timeline" id="history"></ul>
+        </div>
+        <div style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 0.5rem;">Knowledge Cache</h3>
+          <div class="knowledge-list" id="knowledge"></div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      Use the training scripts (`scripts/train_online.py`) and policies (`policies/dialogue_rules.yaml`) to keep this
+      AI sharp, witty, and safe. Trusted sources only.
+    </footer>
+    <script>
+      async function fetchJSON(url, options) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || response.statusText);
+        }
+        return response.json();
+      }
+
+      function renderHistory(items) {
+        const container = document.getElementById("history");
+        container.innerHTML = "";
+        if (!items.length) {
+          container.innerHTML = '<li><h3>No missions yet</h3><span>Run a mission to populate history.</span></li>';
+          return;
+        }
+        items.slice().reverse().forEach((item) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<h3>${item.context}</h3><span>Score: ${item.score.toFixed(2)} · Tags: ${item.tags.join(", ")}</span>`;
+          container.appendChild(li);
+        });
+      }
+
+      function renderKnowledge(items) {
+        const container = document.getElementById("knowledge");
+        container.innerHTML = "";
+        if (!items.length) {
+          container.innerHTML = '<span class="pill">Bootstrapping…</span>';
+          return;
+        }
+        items.slice().reverse().forEach((item) => {
+          const entry = document.createElement("div");
+          entry.className = "pill";
+          entry.textContent = item.id;
+          container.appendChild(entry);
+        });
+      }
+
+      async function refreshTelemetry() {
+        try {
+          const [history, knowledge] = await Promise.all([
+            fetchJSON("/api/history?limit=10"),
+            fetchJSON("/api/knowledge?limit=10"),
+          ]);
+          renderHistory(history.items || []);
+          renderKnowledge(knowledge.items || []);
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      async function updateStatus() {
+        try {
+          const status = await fetchJSON("/api/health");
+          document.getElementById("status").textContent = `Knowledge: ${status.knowledge_entries}`;
+        } catch (error) {
+          document.getElementById("status").textContent = "Offline";
+        }
+      }
+
+      document.getElementById("mission-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = event.submitter;
+        button.disabled = true;
+        button.textContent = "Processing…";
+        const payload = {
+          goal: document.getElementById("goal").value,
+          keywords: document.getElementById("keywords").value,
+          log_response: document.getElementById("log-response").checked,
+        };
+        try {
+          const result = await fetchJSON("/api/missions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          document.getElementById(
+            "response-output"
+          ).textContent = `${result.response}\n\nConfidence: ${(result.confidence * 100).toFixed(1)}%`;
+          await refreshTelemetry();
+          await updateStatus();
+        } catch (error) {
+          document.getElementById("response-output").textContent = `Mission failed: ${error.message}`;
+        } finally {
+          button.disabled = false;
+          button.textContent = "Launch Mission";
+        }
+      });
+
+      refreshTelemetry();
+      updateStatus();
+    </script>
+  </body>
+</html>

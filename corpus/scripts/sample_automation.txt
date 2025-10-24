@@ -1,0 +1,2 @@
+# Example automation script
+print("Hello from the organic scripting AI prototype!")
