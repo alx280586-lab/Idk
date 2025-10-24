@@ -62,6 +62,11 @@ class CollaborationLayer:
                 status = self._kernel.stop_autonomous_training()
                 self.render_response(prompt, status.render())
                 continue
+            if command == "distill":
+                topic = payload or None
+                receipt = self._kernel.distill(topic)
+                self.render_response(prompt, receipt.render())
+                continue
             if command in {"talk", "chat"}:
                 if not payload:
                     print("Share a message with 'talk <your thought>'.")
@@ -100,6 +105,7 @@ class CollaborationLayer:
             "  reflect- trigger reflection cycle\n"
             "  log    - ask for a narrative explanation\n"
             "  train  - feed new knowledge into the training ground\n"
+            "  distill- run dialogue distillation to sharpen tone\n"
             "  atrain - unleash continuous autonomous training (prefix with 'once' for a single burst)\n"
             "  stop   - pause continuous autonomous training\n"
             "  talk   - chat with Eidolon Prime about anything on your mind\n"

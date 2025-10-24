@@ -57,6 +57,14 @@ class LanguageOutputTests(unittest.TestCase):
         self.assertNotIn("curiosity is high", lowered)
         self.assertNotIn("personality", lowered)
 
+    def test_distillation_command_populates_dialogue_examples(self) -> None:
+        receipt = self.app.kernel.distill()
+        self.assertGreaterEqual(
+            receipt.stored,
+            1,
+            "Distillation should capture at least one dialogue exemplar.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

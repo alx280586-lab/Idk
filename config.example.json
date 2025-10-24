@@ -19,6 +19,7 @@
       "reflect",
       "log",
       "train",
+      "distill",
       "atrain",
       "stop",
       "talk",

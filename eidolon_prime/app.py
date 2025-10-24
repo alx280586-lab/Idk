@@ -32,6 +32,7 @@ from .critics import CriticSuite
 from .orchestrator import ReasoningOrchestrator
 from .neural import UltraNeuralNetwork, NarrowCollective, NarrowSpecialist
 from .ollama import OllamaBridge
+from .distillation import DistillationCoach
 
 
 @dataclass
@@ -96,6 +97,7 @@ class EidolonPrimeApp:
             model=config.neural.ollama_model,
             timeout=config.neural.ollama_timeout,
         )
+        distillation = DistillationCoach(memory, conversation, ollama_bridge)
         neural = UltraNeuralNetwork(
             parameter_count=config.neural.parameter_count,
             layers=config.neural.layers,
@@ -150,6 +152,7 @@ class EidolonPrimeApp:
             knowledge=knowledge,
             neural=neural,
             collective=collective,
+            distillation=distillation,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)
@@ -189,6 +192,12 @@ class EidolonPrimeApp:
                 self.kernel.enforce_security(command, payload)
                 status = self.kernel.stop_autonomous_training()
                 self.collaboration.render_response(prompt, status.render())
+                continue
+            if command == "distill":
+                self.kernel.enforce_security(command, payload)
+                topic = payload or None
+                receipt = self.kernel.distill(topic)
+                self.collaboration.render_response(prompt, receipt.render())
                 continue
             if command in {"talk", "chat"}:
                 if not payload:

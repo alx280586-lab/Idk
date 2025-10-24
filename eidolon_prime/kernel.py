@@ -31,6 +31,7 @@ from .neural import (
     NarrowCollective,
     CollectiveReport,
 )
+from .distillation import DistillationCoach
 
 
 _SMALLTALK_VOCAB = {
@@ -147,6 +148,23 @@ class AutoTrainingStatus:
         )
 
 
+@dataclass
+class DistillationReceipt:
+    """Summary of a conversational distillation cycle."""
+
+    topic: Optional[str]
+    stored: int
+
+    def render(self) -> str:
+        topic_text = self.topic or "general dialogue foundations"
+        if self.stored == 0:
+            return f"No new distillation entries were added for {topic_text}."
+        return (
+            f"Distillation captured {self.stored} dialogue exemplars for {topic_text}.\n"
+            "They are now available to influence future conversations."
+        )
+
+
 class Kernel:
     """Coordinates the major subsystems."""
 
@@ -170,6 +188,7 @@ class Kernel:
         knowledge: KnowledgeGapMonitor,
         neural: UltraNeuralNetwork,
         collective: NarrowCollective,
+        distillation: DistillationCoach,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -189,6 +208,7 @@ class Kernel:
         self._knowledge = knowledge
         self._neural = neural
         self._collective = collective
+        self._distillation = distillation
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -196,6 +216,7 @@ class Kernel:
         self._continuous_training_stop: Optional[threading.Event] = None
         self._continuous_training_focus: Optional[str] = None
         self._background_warmup_thread: Optional[threading.Thread] = None
+        self._distilled_topics: set[str] = set()
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -221,15 +242,23 @@ class Kernel:
             self._conversation.ingest_highlights(
                 ((record.topic, record.content, record.content),)
             )
+        self._maybe_distill(record.topic)
         self._synthetic.observe_training_report(
             f"manual-train::{record.topic}::{record.content}"
         )
         return record
 
+    def distill(self, topic: Optional[str] = None) -> DistillationReceipt:
+        captured = self._distillation.run(topic)
+        if topic:
+            self._distilled_topics.add(topic.lower())
+        return DistillationReceipt(topic, captured)
+
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
         understanding = self._comprehension.analyse(message)
         is_smalltalk = self._is_smalltalk_message(understanding)
+        self._maybe_distill(understanding.focus_text() or understanding.topic_hint())
         gap_report = self._knowledge.evaluate(understanding, self._memory)
         understanding.unknown_terms = gap_report.unresolved_terms()
         understanding.researched_terms = gap_report.resolved_terms()
@@ -748,6 +777,16 @@ class Kernel:
         unique_count = len({token for token in understanding.tokens if len(token) > 2})
         lexical = min(0.9, 0.45 + 0.05 * unique_count)
         return reply_text, lexical
+
+    def _maybe_distill(self, topic_hint: Optional[str]) -> None:
+        if not topic_hint:
+            return
+        lowered = topic_hint.lower().strip()
+        if not lowered or lowered in self._distilled_topics:
+            return
+        captured = self._distillation.run(lowered, limit=4)
+        if captured:
+            self._distilled_topics.add(lowered)
 
     def _build_semantic_frame(
         self,

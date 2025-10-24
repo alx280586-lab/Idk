@@ -200,6 +200,13 @@ class ConversationDatastore:
 
         return self._patterns.get(pattern_id)
 
+    def add_pattern(self, pattern: ConversationPattern) -> None:
+        """Register a new conversation pattern supplied by distillation or training."""
+
+        if pattern.pattern_id in self._patterns:
+            return
+        self._patterns[pattern.pattern_id] = pattern
+
     def ingest_highlights(
         self, highlights: Iterable[Tuple[str, str, str]]
     ) -> None:

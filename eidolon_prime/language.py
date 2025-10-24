@@ -959,28 +959,26 @@ class LanguageEngine:
 
     def _op_cause_effect(self, slots: Dict[str, str]) -> Dict[str, str]:
         updated = dict(slots)
-        if "analysis" in updated:
-            updated["analysis"] += " That cause leads to the evidence I shared."
+        if "analysis" in updated and updated["analysis"]:
+            updated["analysis"] += " The supporting evidence right after this line shows why that matters."
         return updated
 
     def _op_highlight_decision(self, slots: Dict[str, str]) -> Dict[str, str]:
         updated = dict(slots)
-        if "action" in updated:
-            updated["action"] += " This keeps your decision surface explicit."
+        if "action" in updated and updated["action"]:
+            updated["action"] += " That keeps the next choice transparent for both of us."
         return updated
 
     def _op_invite_followup(self, slots: Dict[str, str]) -> Dict[str, str]:
         updated = dict(slots)
-        updated["closing"] = (
-            updated.get("closing", "")
-            + " If you'd like more detail, point me at a specific aspect and I'll dive in."
-        ).strip()
+        invitation = " If you'd like me to go deeper, just point at a specific angle and I'll expand."
+        updated["closing"] = (updated.get("closing", "") + invitation).strip()
         return updated
 
     def _op_amplify_emotion(self, slots: Dict[str, str]) -> Dict[str, str]:
         updated = dict(slots)
-        if "analysis" in updated:
-            updated["analysis"] += " That momentum is worth leaning into."
+        if "analysis" in updated and updated["analysis"]:
+            updated["analysis"] += " I genuinely enjoy helping with topics like this."
         return updated
 
     def _op_code_focus(self, slots: Dict[str, str]) -> Dict[str, str]:
