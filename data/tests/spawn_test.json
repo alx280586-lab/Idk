@@ -1,0 +1,8 @@
+{
+  "name": "spawn_returns_position",
+  "description": "Ensures the generator picks a position when tagged spawns exist.",
+  "inputs": {
+    "tag": "NPC"
+  },
+  "expected": "Vector3"
+}

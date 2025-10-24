@@ -1,0 +1,7 @@
+naming:
+  function_case: camel
+  variable_case: camel
+preferences:
+  collection_service_tags: true
+  prefer_random_new: false
+  default_module_return: true
