@@ -188,6 +188,59 @@ The server also exposes JSON endpoints if you want to integrate another tool:
 - `POST /api/train` – triggers the training suite.
 - `POST /api/doc` – `{ "url": "https://create.roblox.com/docs/...", "query": "PathfindingService" }`
 
+## Turn it into an “app” with the quick-launch UI
+
+If you want a point-and-click experience, use the `start_ui.py` launcher. It starts the training pass (optional), boots the web server, and opens your browser automatically so you land directly in the chatbot UI.
+
+### Step-by-step (Windows, macOS, or Linux)
+
+1. Make sure your virtual environment is active (see [Step 2](#2-create-and-activate-a-virtual-environment)).
+2. Run the launcher:
+
+   ```bash
+   python start_ui.py
+   ```
+
+   The script prints the server address (default `http://127.0.0.1:8000`) and then opens your default browser to that page. Leave the terminal window open while you use the app. Press `Ctrl+C` in the terminal when you want to shut it down.
+
+3. (Optional) Have the launcher retrain before opening the UI:
+
+   ```bash
+   python start_ui.py --train
+   ```
+
+4. (Optional) If you prefer to start the server first and open the browser yourself, add `--no-browser`:
+
+   ```bash
+   python start_ui.py --no-browser
+   ```
+
+### Create a desktop shortcut (optional)
+
+- **Windows:**
+  1. Open Notepad and paste `@echo off` on the first line and `call %~dp0\.venv\Scripts\activate.bat` on the second line, followed by `python start_ui.py` on the third line.
+  2. Save the file as `StartLuauLab.bat` inside the project folder.
+  3. Right-click the new file → **Create shortcut** and move the shortcut to your desktop. Double-click it whenever you want to launch the chatbot UI.
+
+- **macOS/Linux:**
+  1. Create a file called `start_luau_lab.sh` in the project folder with the contents:
+
+     ```bash
+     #!/usr/bin/env bash
+     source "$(dirname "$0")/.venv/bin/activate"
+     python "$(dirname "$0")/start_ui.py"
+     ```
+
+  2. Make it executable:
+
+     ```bash
+     chmod +x start_luau_lab.sh
+     ```
+
+  3. Drag the file into your dock/launcher or double-click it from your file manager (choose “Run in Terminal” when prompted).
+
+This approach keeps everything local and avoids extra steps—once your environment is prepared, launching the UI is as simple as double-clicking your shortcut.
+
 ## Training suite (single entry point)
 
 All training logic lives in `luau_lab/training.py`. To run it manually:
