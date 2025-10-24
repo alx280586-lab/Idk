@@ -110,12 +110,14 @@ class SyntheticSettings:
 class NeuralSettings:
     """Configures the ultra neural mesh used for conversational fluency."""
 
-    parameter_count: int = 2_000_000
+    parameter_count: int = 4_000_000
     layers: List[str] = field(
         default_factory=lambda: [
             "lexical", "concept", "dialogue", "evidence", "expression"
         ]
     )
+    ollama_model: Optional[str] = None
+    ollama_timeout: float = 4.0
 
 
 @dataclass
@@ -190,6 +192,8 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
         "neural": {
             "parameter_count": config.neural.parameter_count,
             "layers": config.neural.layers,
+            "ollama_model": config.neural.ollama_model,
+            "ollama_timeout": config.neural.ollama_timeout,
         },
         "orchestrator": {"trace_path": config.orchestrator.trace_path},
     }

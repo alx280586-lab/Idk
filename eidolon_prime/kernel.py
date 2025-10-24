@@ -4,7 +4,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, Any, Iterable, Optional, List
+from typing import Dict, Any, Iterable, Optional, List, Tuple
 
 from .config import EidolonConfig
 from .state import PersonalityState
@@ -31,6 +31,48 @@ from .neural import (
     NarrowCollective,
     CollectiveReport,
 )
+
+
+_SMALLTALK_VOCAB = {
+    "hi",
+    "hello",
+    "hey",
+    "heya",
+    "hiya",
+    "how",
+    "are",
+    "you",
+    "doing",
+    "today",
+    "tonight",
+    "this",
+    "morning",
+    "afternoon",
+    "evening",
+    "hope",
+    "your",
+    "day",
+    "going",
+    "well",
+    "good",
+    "great",
+    "nice",
+    "to",
+    "meet",
+    "pleased",
+    "thanks",
+    "thank",
+    "friend",
+    "there",
+    "what's",
+    "whats",
+    "up",
+    "greetings",
+    "hello!",
+    "yo",
+    "sup",
+    "greet",
+}
 
 
 @dataclass
@@ -187,6 +229,7 @@ class Kernel:
     def chat(self, message: str) -> ChatResult:
         self._firewall.inspect("talk", message)
         understanding = self._comprehension.analyse(message)
+        is_smalltalk = self._is_smalltalk_message(understanding)
         gap_report = self._knowledge.evaluate(understanding, self._memory)
         understanding.unknown_terms = gap_report.unresolved_terms()
         understanding.researched_terms = gap_report.resolved_terms()
@@ -195,6 +238,8 @@ class Kernel:
         unresolved_gaps = gap_report.unresolved()
         max_gap_checks = min(3, len(unresolved_gaps))
         for gap in unresolved_gaps[:max_gap_checks]:
+            if is_smalltalk:
+                break
             gap_report.triggered_queries.append(gap.term)
             report = self.autonomous_train(gap.term, batch_size=6)
             resolved_gap = self._knowledge.register_resolution(gap, report, self._memory)
@@ -218,19 +263,23 @@ class Kernel:
         )
         if analysis.reasoning_summary is None:
             analysis.reasoning_summary = ""
+        if is_smalltalk:
+            analysis.reasoning_summary = (
+                "Recognised a friendly greeting, prioritised rapport, and invited a follow-up question."
+            )
         activation = self._neural.activate(
             message,
             understanding,
             plan,
             analysis.orchestration,
         )
-        if activation.summary not in analysis.reasoning_summary:
+        if activation.summary not in analysis.reasoning_summary and not is_smalltalk:
             if analysis.reasoning_summary:
                 analysis.reasoning_summary += "\n\n" + activation.summary
             else:
                 analysis.reasoning_summary = activation.summary
         refresh_report: AutoTrainingReport | None = None
-        if self._should_refresh_context(message, analysis, understanding):
+        if self._should_refresh_context(message, analysis, understanding) and not is_smalltalk:
             focus_query = understanding.focus_text() or message
             refresh_report = self.autonomous_train(focus_query, batch_size=6)
             self._memory.record(
@@ -257,29 +306,32 @@ class Kernel:
                 + f" I refreshed context with a web-assisted practice batch (stage {refresh_report.curriculum_stage}, quiz {refresh_report.quiz_score:.2f})."
             )
         harvested_reports: List[AutoTrainingReport] = []
-        processed_queries = set()
-        for query in plan.harvest_queries[: self._config.synthetic.max_harvest_queries]:
-            normalized = query.lower()
-            if normalized in processed_queries:
-                continue
-            processed_queries.add(normalized)
-            report = self.autonomous_train(query, batch_size=8)
-            harvested_reports.append(report)
-        if harvested_reports:
-            plan = self._synthetic.plan(message, understanding, self._memory)
-            analysis = self._cortex.process(
-                message,
-                understanding=understanding,
-                plan=plan,
-                gap_report=gap_report,
-            )
-            activation = self._neural.activate(
-                message,
-                understanding,
-                plan,
-                analysis.orchestration,
-            )
-        if gap_report.resolved_terms():
+        if not is_smalltalk:
+            processed_queries = set()
+            for query in plan.harvest_queries[
+                : self._config.synthetic.max_harvest_queries
+            ]:
+                normalized = query.lower()
+                if normalized in processed_queries:
+                    continue
+                processed_queries.add(normalized)
+                report = self.autonomous_train(query, batch_size=8)
+                harvested_reports.append(report)
+            if harvested_reports:
+                plan = self._synthetic.plan(message, understanding, self._memory)
+                analysis = self._cortex.process(
+                    message,
+                    understanding=understanding,
+                    plan=plan,
+                    gap_report=gap_report,
+                )
+                activation = self._neural.activate(
+                    message,
+                    understanding,
+                    plan,
+                    analysis.orchestration,
+                )
+        if gap_report.resolved_terms() and not is_smalltalk:
             reinforcement = ", ".join(gap_report.resolved_terms()[:4])
             addition = (
                 "Vocabulary reinforcement completed: "
@@ -290,7 +342,7 @@ class Kernel:
                 analysis.reasoning_summary += "\n\n" + addition
             else:
                 analysis.reasoning_summary = addition
-        if gap_resolution_notes:
+        if gap_resolution_notes and not is_smalltalk:
             combined = " | ".join(gap_resolution_notes[:3])
             self._memory.record(
                 "conversation::gap_resolution",
@@ -308,6 +360,10 @@ class Kernel:
                 if candidate.pattern_id == "code.review.sequence":
                     pattern = candidate
                     break
+        if is_smalltalk:
+            smalltalk_pattern = self._conversation.get_pattern("dialogue.loop.reflect")
+            if smalltalk_pattern:
+                pattern = smalltalk_pattern
         self._conversation.ingest_highlights(
             (
                 f"conversation::focus::{index}",
@@ -344,18 +400,25 @@ class Kernel:
             analysis.orchestration,
             activation,
             collective,
+            smalltalk=is_smalltalk,
         )
         preferred_register = (
             "engineering" if understanding.coding_terms else pattern.register
         )
-        reply_body, lexical = self._language.compose_reply(
-            frame,
-            pattern.structure,
-            preferred_register,
-            self._personality.describe(),
-        )
+        if is_smalltalk:
+            reply_body, lexical = self._compose_smalltalk_reply(understanding)
+        else:
+            reply_body, lexical = self._language.compose_reply(
+                frame,
+                pattern.structure,
+                preferred_register,
+                self._personality.describe(),
+            )
         reply_body = self._limit_paragraphs(reply_body, 2)
-        tone_header = self._describe_tone(pattern.tone)
+        if is_smalltalk:
+            tone_header = "Hi there! I'm glad you reached out."
+        else:
+            tone_header = self._describe_tone(pattern.tone)
         reply = f"{tone_header}\n\n{reply_body}"
         speech_output = self._speech.vocalize(reply_body)
         response_delay = max(0.0, min(2.0, self._config.resources.response_delay))
@@ -597,6 +660,44 @@ class Kernel:
             return "positive"
         return "neutral"
 
+    def _is_smalltalk_message(self, understanding: MessageUnderstanding) -> bool:
+        tokens = [token for token in understanding.tokens if token]
+        if not tokens:
+            return False
+        unique_tokens = set(tokens)
+        greeting_core = unique_tokens - {"i", "im", "i'm", "it's", "its", "am"}
+        if greeting_core and greeting_core.issubset(_SMALLTALK_VOCAB):
+            return True
+        if tokens[0] in {"hi", "hello", "hey", "yo"}:
+            unfamiliar = unique_tokens - (
+                _SMALLTALK_VOCAB | {"i", "im", "i'm", "it's", "its", "am"}
+            )
+            if len(unfamiliar) <= 1:
+                return True
+        if len(tokens) <= 6 and unique_tokens.issubset(
+            _SMALLTALK_VOCAB | {"i", "im", "i'm", "it's", "its", "am"}
+        ):
+            return True
+        return False
+
+    def _compose_smalltalk_reply(
+        self, understanding: MessageUnderstanding
+    ) -> Tuple[str, float]:
+        greeting_sentence = (
+            understanding.sentences[0]
+            if understanding.sentences
+            else understanding.original.strip()
+        )
+        acknowledgement = "Thanks for checking in."
+        if greeting_sentence:
+            acknowledgement = f"Thanks for the greeting — I heard \"{greeting_sentence}\"."
+        follow_up = "I'm doing well and ready to help with anything you're curious about."
+        invitation = "Whenever you're ready, let me know what you'd like to explore next."
+        reply_text = f"{acknowledgement} {follow_up} {invitation}"
+        unique_count = len({token for token in understanding.tokens if len(token) > 2})
+        lexical = min(0.9, 0.45 + 0.05 * unique_count)
+        return reply_text, lexical
+
     def _build_semantic_frame(
         self,
         message: str,
@@ -609,7 +710,39 @@ class Kernel:
         orchestration: Optional[OrchestratorResult],
         activation: NeuralActivation,
         collective: Optional[CollectiveReport],
+        *,
+        smalltalk: bool = False,
     ) -> SemanticFrame:
+        if smalltalk:
+            topic = understanding.topic_hint() or "your greeting"
+            greeting_sentence = (
+                understanding.sentences[0]
+                if understanding.sentences
+                else understanding.original.strip()
+            )
+            key_points: List[str] = []
+            if greeting_sentence:
+                key_points.append(
+                    f"Recognised the greeting '{greeting_sentence}' and mirrored the tone."
+                )
+            evidence: List[str] = []
+            actions = [
+                "Invite the user to share any questions or tasks they want to tackle next."
+            ]
+            emotional_tone = "warm"
+            call_to_action = "Tell me what you'd like to talk about or build."
+            outcome = "Greeting acknowledged and invitation issued."
+            return SemanticFrame(
+                intent="conversation",
+                topic=topic,
+                user_message=understanding.original,
+                key_points=key_points,
+                evidence=evidence,
+                actions=actions,
+                emotional_tone=emotional_tone,
+                call_to_action=call_to_action,
+                outcome=outcome,
+            )
         topic = self._derive_topic(
             message, analysis.related_memories, understanding, plan
         )

@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 from .comprehension import MessageUnderstanding
 from .synthetic import SyntheticThoughtPlan
 from .orchestrator import OrchestratorResult
+from .ollama import OllamaBridge
 
 
 @dataclass
@@ -43,9 +44,15 @@ class CollectiveReport:
 class UltraNeuralNetwork:
     """Deterministic neural mesh that steers reasoning without huge weights."""
 
-    def __init__(self, parameter_count: int, layers: Sequence[str]) -> None:
+    def __init__(
+        self,
+        parameter_count: int,
+        layers: Sequence[str],
+        ollama: Optional[OllamaBridge] = None,
+    ) -> None:
         self.parameter_count = int(parameter_count)
         self._layers = list(layers)
+        self._ollama = ollama
 
     def activate(
         self,
@@ -81,10 +88,19 @@ class UltraNeuralNetwork:
                     focus_terms.append(lowered)
         if not focus_terms:
             focus_terms = tokens[:6]
-        summary = (
+        base_summary = (
             "Neural mesh mapped the utterance across "
             f"{len(self._layers)} layered feature groups while tracking {len(focus_terms)} focus terms."
         )
+        summary = base_summary
+        if self._ollama and self._ollama.available():
+            ollama_hint = self._ollama.suggest_summary(message)
+            if ollama_hint:
+                summary = f"{ollama_hint} (ollama hint). {base_summary}"
+                for term in ollama_hint.split():
+                    lowered = term.lower().strip(".,:;!?")
+                    if lowered and lowered not in focus_terms:
+                        focus_terms.append(lowered)
         return NeuralActivation(
             parameter_count=self.parameter_count,
             focus_vector=vector,

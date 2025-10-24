@@ -525,8 +525,14 @@ class LanguageEngine:
     ) -> List[str]:
         structure_parts = structure.split("→")
         paragraphs: List[str] = []
-        intro = [slots.get("introduction", ""), f"Personality snapshot: {personality_snapshot}."]
-        paragraphs.append(" ".join(part for part in intro if part))
+        intro = [slots.get("introduction", "")]
+        if personality_snapshot:
+            intro.append(
+                f"I'm keeping your preferences in mind: {personality_snapshot}."
+            )
+        intro_text = " ".join(part for part in intro if part).strip()
+        if intro_text:
+            paragraphs.append(intro_text)
         body_sentences: List[str] = []
         for segment in structure_parts:
             key = self._segment_to_slot(segment)

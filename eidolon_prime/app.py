@@ -31,6 +31,7 @@ from .evaluation import EvaluationHarness
 from .critics import CriticSuite
 from .orchestrator import ReasoningOrchestrator
 from .neural import UltraNeuralNetwork, NarrowCollective, NarrowSpecialist
+from .ollama import OllamaBridge
 
 
 @dataclass
@@ -91,9 +92,14 @@ class EidolonPrimeApp:
             critics,
             default_trace_path=config.orchestrator.trace_path,
         )
+        ollama_bridge = OllamaBridge(
+            model=config.neural.ollama_model,
+            timeout=config.neural.ollama_timeout,
+        )
         neural = UltraNeuralNetwork(
             parameter_count=config.neural.parameter_count,
             layers=config.neural.layers,
+            ollama=ollama_bridge,
         )
         collective = NarrowCollective(
             specialists=[

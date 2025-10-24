@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, Dict, Iterable, List, Tuple
+from typing import Deque, Dict, Iterable, List, Optional, Tuple
 
 
 @dataclass
@@ -170,6 +170,11 @@ class ConversationDatastore:
             pattern.usage_count += 1
             adjusted_success = 0.5 * success + 0.5 * min(1.0, lexical_variety)
             pattern.register_success(context, adjusted_success)
+
+    def get_pattern(self, pattern_id: str) -> Optional[ConversationPattern]:
+        """Return a stored pattern if present."""
+
+        return self._patterns.get(pattern_id)
 
     def ingest_highlights(
         self, highlights: Iterable[Tuple[str, str, str]]

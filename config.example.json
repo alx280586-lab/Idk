@@ -61,14 +61,16 @@
     "max_harvest_queries": 4
   },
   "neural": {
-    "parameter_count": 2000000,
+    "parameter_count": 4000000,
     "layers": [
       "lexical",
       "concept",
       "dialogue",
       "evidence",
       "expression"
-    ]
+    ],
+    "ollama_model": null,
+    "ollama_timeout": 4.0
   },
   "orchestrator": {
     "trace_path": "trace.json"
