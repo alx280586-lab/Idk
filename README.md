@@ -187,6 +187,12 @@ The Speech Academy (`eidolon_prime/speech.py`) adds an explicit conversation cur
 
 Every autonomous training run blends these drills with the tiered web crawl, logs quiz scores, and only promotes to the next tier when the practice average clears the stage threshold.
 
+### 7d. Adaptive Reasoning Profile
+- **Live tendency tracking:** The new `eidolon_prime/reasoning.py` module keeps a transparent bias table of which knowledge domains recently influenced the cortex. Every prompt funnels through this profile so greetings stop hijacking specialised memories (no more “hello” turning into Roblox advice) and analytical clusters rise only when the words you used actually point there.
+- **Training-driven adjustments:** Each autonomous crawl and speech drill now feeds the profile with provenance-tagged highlights. Trusted Tier-A/S sources raise their weight, while social chit-chat decays quickly. Six-hour `atrain` sessions accumulate long histories that actively redirect future reasoning steps.
+- **Paragraph-grade thinking:** When the cortex finishes a turn it asks the profile to compose a multi-paragraph explanation of what happened. The first paragraph explains how your words were parsed; the second reports experiments, synthetic plan modules, and which training runs nudged the answer. These summaries appear in the CLI reasoning trail.
+- **Operator visibility:** `status` and conversation transcripts will show the updated reasoning summary so you can watch tendencies shift after long study sessions and verify that web training genuinely changes how the engine thinks.
+
 ### 7. Review Reasoning Trails
 1. During a session you can type `status` at any time to inspect the live personality vectors and a summary of recorded memories.
 2. Detailed traces are held in memory while the program is running. Explore the data structures defined in `eidolon_prime/memory.py` if you want to build your own persistence or visualization layer.

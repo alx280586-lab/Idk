@@ -11,6 +11,7 @@ from .reflection import ReflectionEngine, ReflectionReport
 from .web_growth import WebGrowthSystem, WebFinding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 from .comprehension import MessageUnderstanding
+from .reasoning import ReasoningProfile
 
 
 @dataclass
@@ -117,6 +118,7 @@ class ReasoningAgent(Agent):
         lowered = prompt.lower().strip()
         understanding: Optional[MessageUnderstanding] = None
         plan: Optional[SyntheticThoughtPlan] = None
+        profile: Optional[ReasoningProfile] = None
         if context:
             candidate = context.get("understanding")
             if isinstance(candidate, MessageUnderstanding):
@@ -124,6 +126,9 @@ class ReasoningAgent(Agent):
             plan_candidate = context.get("synthetic_plan")
             if isinstance(plan_candidate, SyntheticThoughtPlan):
                 plan = plan_candidate
+            profile_candidate = context.get("reasoning_profile")
+            if isinstance(profile_candidate, ReasoningProfile):
+                profile = profile_candidate
         tokens = _keywords(lowered)
         steps: List[str] = []
         if _looks_like_greeting(lowered):
@@ -161,6 +166,20 @@ class ReasoningAgent(Agent):
             )
             if plan.outline:
                 steps.append(plan.outline[0])
+        if profile:
+            biases = profile.bias_snapshot()
+            if biases:
+                formatted = ", ".join(f"{domain}×{weight:.2f}" for domain, weight in biases[:3])
+                steps.append(
+                    "Reasoning profile currently emphasises "
+                    + formatted
+                    + ", ensuring the focus shifts with new evidence."
+                )
+            recent_training = profile.recent_training(1)
+            if recent_training:
+                steps.append(
+                    "Latest training influence: " + recent_training[-1]
+                )
         reasoning_tracks = [entry for entry in related if entry.topic.startswith("reasoning::")]
         if reasoning_tracks:
             focus = reasoning_tracks[0].topic.split("::")[1:4]
@@ -259,6 +278,7 @@ class Cortex:
         reflection: ReflectionEngine,
         web_growth: WebGrowthSystem,
         synthetic: SyntheticThoughtEngine,
+        reasoning: ReasoningProfile,
     ) -> None:
         self._personality = personality
         self._forge = forge
@@ -266,6 +286,7 @@ class Cortex:
         self._reflection = reflection
         self._web_growth = web_growth
         self._synthetic = synthetic
+        self._reasoning = reasoning
         self._agents: List[Agent] = [
             LogicAgent(),
             CuriosityAgent(),
@@ -287,6 +308,7 @@ class Cortex:
             if focus_text:
                 query = f"{prompt} || {focus_text}"
         related = self._memory.search(query, limit=7)
+        related = self._reasoning.refine_related(prompt, understanding, related)
         generated_plan = plan
         if generated_plan is None and understanding is not None:
             generated_plan = self._synthetic.plan(prompt, understanding, self._memory)
@@ -300,12 +322,15 @@ class Cortex:
                 0.66,
                 "autonomous_web",
             )
+            self._reasoning.observe_training(report)
             related = self._memory.search(query, limit=9)
+            related = self._reasoning.refine_related(prompt, understanding, related)
         context: Dict[str, object] = {}
         if understanding:
             context["understanding"] = understanding
         if plan:
             context["synthetic_plan"] = plan
+        context["reasoning_profile"] = self._reasoning
         for agent in self._agents:
             responses.extend(
                 agent.generate(
@@ -334,44 +359,12 @@ class Cortex:
         understanding: Optional[MessageUnderstanding] = None,
         plan: Optional[SyntheticThoughtPlan] = None,
     ) -> str:
-        if not related:
-            if understanding and understanding.focus_terms:
-                focus = ", ".join(understanding.focus_terms[:4])
-                return (
-                    "I am exploring the prompt without a direct precedent in memory, "
-                    f"so I'm leaning on your highlighted terms: {focus}."
-                )
-            summary = "I am exploring the prompt without a direct precedent in memory."
-            if plan:
-                summary += " Synthetic modules keep the plan structured despite the gap."
-            return summary
-        dominant_topics = {}
-        for entry in related:
-            head = entry.topic.split("::")[0]
-            dominant_topics[head] = dominant_topics.get(head, 0) + 1
-        ordered = sorted(dominant_topics.items(), key=lambda item: item[1], reverse=True)
-        focus_domain = ordered[0][0]
-        experiment_summary = " and ".join(result.description for result in experiments[:2]) if experiments else "baseline heuristics"
-        detail = ""
-        if understanding and understanding.focus_pairs:
-            detail = (
-                " I also preserved your phrasing focus around "
-                + ", ".join(understanding.focus_pairs[:3])
-                + "."
-            )
-        synthetic_clause = ""
-        if plan:
-            synthetic_clause = (
-                " Synthetic plan engaged modules "
-                + ", ".join(trace.module for trace in plan.module_traces[:3])
-                + " and recommended "
-                + (plan.outline[0] if plan.outline else "a verification loop")
-                + "."
-            )
-        return (
-            f"I mapped your prompt '{prompt}' to the domain '{focus_domain}' using the strongest training overlaps. "
-            f"Experiments such as {experiment_summary} confirm that the retrieved lessons align with your request.{detail}"\
-            f"{synthetic_clause}"
+        return self._reasoning.compose_summary(
+            prompt,
+            related,
+            experiments,
+            understanding,
+            plan,
         )
 
     def register_finding(self, finding: WebFinding) -> int:
@@ -400,7 +393,11 @@ class CortexResult:
         lines.append("\nWeb policy:")
         lines.append(f"- {self.policy_summary}")
         lines.append("\nReasoning summary:")
-        lines.append(f"- {self.reasoning_summary}")
+        if self.reasoning_summary:
+            formatted = self.reasoning_summary.replace("\n\n", "\n  \n  ").replace("\n", "\n  ")
+            lines.append(f"- {formatted}")
+        else:
+            lines.append("- (no reasoning summary recorded)")
         if self.related_memories:
             lines.append("\nEvidence snippets:")
             for entry in self.related_memories[:5]:

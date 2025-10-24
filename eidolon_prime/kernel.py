@@ -22,6 +22,7 @@ from .dataset import load_seed_training_corpus
 from .curriculum import load_foundational_datastores
 from .comprehension import MessageComprehender, MessageUnderstanding
 from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
+from .reasoning import ReasoningProfile
 
 
 @dataclass
@@ -93,6 +94,7 @@ class Kernel:
         speech: SpeechAcademy,
         comprehension: MessageComprehender,
         synthetic: SyntheticThoughtEngine,
+        reasoning: ReasoningProfile,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -108,6 +110,7 @@ class Kernel:
         self._speech = speech
         self._comprehension = comprehension
         self._synthetic = synthetic
+        self._reasoning = reasoning
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -300,6 +303,7 @@ class Kernel:
             report.imported += len(practice.outcomes)
             if practice.phase_complete:
                 self._personality.adjust(confidence=0.02, empathy=0.02)
+        self._reasoning.observe_training(report)
         if report.imported:
             self._personality.adjust(curiosity=0.04, confidence=0.02)
         else:
@@ -492,6 +496,9 @@ class Kernel:
             return understanding.focus_pairs[0]
         if understanding.focus_terms:
             return " ".join(understanding.focus_terms[:4])
+        bias_snapshot = self._reasoning.bias_snapshot(1)
+        if bias_snapshot:
+            return bias_snapshot[0][0].replace("_", " ")
         tokens = [token.strip(".,!?;:") for token in message.split() if len(token) > 3]
         return " ".join(tokens[:4]) if tokens else message[:32]
 
@@ -668,6 +675,9 @@ class Kernel:
                     0.82,
                     "system",
                 )
+                self._reasoning.register_foundation(
+                    f"Foundational datasets emphasised: {', '.join(sorted(foundations))}"
+                )
             if synthetic_counts:
                 total_synth = sum(synthetic_counts.values())
                 self._memory.record(
@@ -675,6 +685,9 @@ class Kernel:
                     f"Seeded synthetic datastores: {synthetic_counts} (total {total_synth}).",
                     0.8,
                     "synthetic_datastore",
+                )
+                self._reasoning.register_foundation(
+                    f"Synthetic datastore seeding: {', '.join(sorted(synthetic_counts))}"
                 )
             practice = self._speech.run_batch(
                 focus="foundational conversation",

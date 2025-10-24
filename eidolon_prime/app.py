@@ -20,6 +20,7 @@ from .language import GrammarDatastore, LanguageEngine
 from .speech import SpeechAcademy
 from .comprehension import MessageComprehender
 from .synthetic import SyntheticThoughtEngine
+from .reasoning import ReasoningProfile
 
 
 @dataclass
@@ -61,6 +62,7 @@ class EidolonPrimeApp:
         language = LanguageEngine(GrammarDatastore())
         comprehension = MessageComprehender()
         speech_academy = SpeechAcademy()
+        reasoning = ReasoningProfile()
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -68,6 +70,7 @@ class EidolonPrimeApp:
             reflection=reflection,
             web_growth=web_growth,
             synthetic=synthetic,
+            reasoning=reasoning,
         )
         kernel = Kernel(
             config=config,
@@ -84,6 +87,7 @@ class EidolonPrimeApp:
             speech=speech_academy,
             comprehension=comprehension,
             synthetic=synthetic,
+            reasoning=reasoning,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)
