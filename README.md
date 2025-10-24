@@ -179,8 +179,15 @@ The web server lets you talk to the bot through your browser. It uses the same f
    python web_server.py
    ```
 
-3. Keep the terminal open. Open your browser and go to `http://localhost:8000`.
-4. Chat with the bot. When you are done, return to the terminal and press `Ctrl+C` to stop the server.
+3. Keep the terminal open. You now have two ways to reach the chat UI:
+
+   - **Open the bundled `index.html` file** – double-click `index.html` (or open it via `File → Open File…` in your browser).
+     The page connects to the running server at `http://127.0.0.1:8000` automatically. This is the easiest option if you prefer
+     launching the UI from your desktop or file manager.
+   - **Visit the live server** – open your browser and go to `http://localhost:8000`. The Flask app serves the same `index.html`
+     file directly.
+
+4. Chat with the bot using either window. When you are done, return to the terminal and press `Ctrl+C` to stop the server.
 
 The server also exposes JSON endpoints if you want to integrate another tool:
 
