@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luau Synthesis Lab</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 2rem 1rem;
+      max-width: 760px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.5;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    #log {
+      white-space: pre-wrap;
+      border: 1px solid rgba(0,0,0,0.2);
+      padding: 1rem;
+      height: 340px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.03);
+    }
+    form {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(0,0,0,0.2);
+    }
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 0.5rem;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: progress;
+    }
+    #status {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: rgba(0,0,0,0.65);
+    }
+    .toolbar {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .toolbar button {
+      background: #1f2937;
+    }
+    .toolbar button.secondary {
+      background: #4b5563;
+    }
+    @media (max-width: 600px) {
+      form {
+        flex-direction: column;
+      }
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 id="title">Luau Synthesis Lab</h1>
+  <p id="greeting">Spin up the backend server (`python start_ui.py`) and chat right here.</p>
+  <div class="toolbar">
+    <button id="train" class="secondary" type="button">Run Training</button>
+    <button id="doc" class="secondary" type="button">Fetch Docs</button>
+  </div>
+  <div id="status"></div>
+  <div id="log"></div>
+  <form id="chat-form">
+    <input type="text" id="message" placeholder="Ask for a Roblox script..." required />
+    <button type="submit" id="send">Send</button>
+  </form>
+  <template id="doc-template">
+    <details open>
+      <summary>Doc fetch: <a id="doc-link" target="_blank" rel="noopener"></a></summary>
+      <ul id="doc-snippets"></ul>
+    </details>
+  </template>
+  <script>
+    const log = document.getElementById('log');
+    const status = document.getElementById('status');
+    const title = document.getElementById('title');
+    const greeting = document.getElementById('greeting');
+    const docTemplate = document.getElementById('doc-template');
+
+    const DEFAULT_HOST = 'http://127.0.0.1:8000';
+    const origin = window.location.origin.startsWith('http') && window.location.origin !== 'file://'
+      ? window.location.origin
+      : DEFAULT_HOST;
+    const API_BASE = `${origin}`;
+
+    async function fetchPersona() {
+      try {
+        const response = await fetch(`${API_BASE}/api/persona`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.name) title.textContent = `${data.name} – Luau Synthesis Lab`;
+        if (data.greeting) greeting.textContent = data.greeting;
+      } catch (error) {
+        console.warn('Persona fetch failed', error);
+      }
+    }
+
+    function appendLog(prefix, message) {
+      log.textContent += `${prefix} ${message}\n`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function sendMessage(message) {
+      const sendButton = document.getElementById('send');
+      sendButton.disabled = true;
+      status.textContent = 'Waiting for the lab to respond…';
+      try {
+        const response = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          appendLog('Lab>', `Error ${response.status}: ${errorText}`);
+          return;
+        }
+        const data = await response.json();
+        appendLog('Lab>', data.reply || '(no reply)');
+      } catch (error) {
+        appendLog('Lab>', `Request failed: ${error}`);
+      } finally {
+        sendButton.disabled = false;
+        status.textContent = '';
+      }
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const messageInput = document.getElementById('message');
+      const message = messageInput.value.trim();
+      if (!message) return;
+      appendLog('You>', message);
+      messageInput.value = '';
+      await sendMessage(message);
+    });
+
+    document.getElementById('train').addEventListener('click', async () => {
+      status.textContent = 'Running training…';
+      try {
+        const response = await fetch(`${API_BASE}/api/train`, { method: 'POST' });
+        const data = await response.json();
+        appendLog('System>', `Training complete: ${JSON.stringify(data, null, 2)}`);
+      } catch (error) {
+        appendLog('System>', `Training failed: ${error}`);
+      } finally {
+        status.textContent = '';
+      }
+    });
+
+    document.getElementById('doc').addEventListener('click', async () => {
+      const url = prompt('Enter a whitelisted URL (must match config):');
+      if (!url) return;
+      const query = prompt('What term should I search for on that page?');
+      status.textContent = 'Fetching documentation…';
+      try {
+        const response = await fetch(`${API_BASE}/api/doc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, query })
+        });
+        const data = await response.json();
+        if (data.error) {
+          appendLog('Docs>', `Error: ${data.error}`);
+        } else {
+          const clone = docTemplate.content.cloneNode(true);
+          clone.querySelector('#doc-link').textContent = data.source;
+          clone.querySelector('#doc-link').href = data.source;
+          const list = clone.querySelector('#doc-snippets');
+          (data.snippets || []).forEach((line) => {
+            const li = document.createElement('li');
+            li.textContent = line;
+            list.appendChild(li);
+          });
+          log.appendChild(clone);
+          log.scrollTop = log.scrollHeight;
+        }
+      } catch (error) {
+        appendLog('Docs>', `Request failed: ${error}`);
+      } finally {
+        status.textContent = '';
+      }
+    });
+
+    appendLog('System>', `Connecting to ${API_BASE}…`);
+    fetchPersona();
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+allowed_sources:
+  - "https://create.roblox.com/docs/"
+  - "https://devforum.roblox.com/"
+  - "https://luau-lang.org/"
+  - "https://api.roblox.com/"
+allowed_source_files:
+  - "data/allowed_sources_extra.txt"
+style:
+  default_random_seed: 1337
+  prefer_random_new: false
+  explanation_depth: rich
+training:
+  examples_dir: "data/examples"
+  tests_dir: "data/tests"
+  persona_file: "persona.yaml"
+  heuristics_file: "heuristics.yaml"
+  doc_queries:
+    - "spawn"
+    - "RemoteEvent"
+    - "PathfindingService"
+    - "TweenService"
+    - "DataStore"
+    - "TeleportService"
+  docs_cache_dir: "data/docs_cache"
+docs:
+  queries:
+    - "CollectionService"
+    - "Humanoid"
+    - "RemoteEvent"
+    - "Luau"
