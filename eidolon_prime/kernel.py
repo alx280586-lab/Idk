@@ -12,7 +12,7 @@ from .forge import Forge
 from .firewall import FirewallRing
 from .reflection import ReflectionEngine
 from .training import TrainingGround, TrainingRecord
-from .web_growth import WebGrowthSystem, WebFinding
+from .web_growth import WebGrowthSystem, WebFinding, AutoTrainingReport
 from .dataset import load_seed_training_corpus
 
 
@@ -67,6 +67,7 @@ class Kernel:
         self._web_growth = web_growth
         self._autonomy_initialized = False
         self._seed_initialized = False
+        self._autonomous_bootstrap_complete = False
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -105,6 +106,16 @@ class Kernel:
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.65, "collaboration")
         return ChatResult(message, reply, analysis)
+
+    def autonomous_train(self, focus: str | None = None) -> AutoTrainingReport:
+        """Trigger a curated crawl across trusted external sources."""
+
+        report = self._web_growth.autonomous_training(focus)
+        if report.imported:
+            self._personality.adjust(curiosity=0.04, confidence=0.02)
+        else:
+            self._personality.adjust(curiosity=0.01)
+        return report
 
     def _summarize_insights(self, responses: Iterable[AgentResponse]) -> str:
         highlights = []
@@ -146,6 +157,16 @@ class Kernel:
             if seeded:
                 self._personality.adjust(confidence=0.08, curiosity=0.05, integrity=0.03)
             self._seed_initialized = True
+        if not self._autonomous_bootstrap_complete:
+            report = self.autonomous_train()
+            if report.imported:
+                self._memory.record(
+                    "autonomy::startup",
+                    "Initial autonomous training cycle completed.",
+                    0.68,
+                    "system",
+                )
+            self._autonomous_bootstrap_complete = True
         settings = self._config.web
         if not settings.autostart:
             self._autonomy_initialized = True

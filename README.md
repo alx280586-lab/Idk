@@ -127,14 +127,15 @@ The following guide assumes you have minimal technical experience. Each step is 
    ```bash
    python -m eidolon_prime
    ```
-3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions. During this boot sequence the Web Growth System automatically crawls and stores the trusted sources you listed in `config.json`, and the kernel injects a curated corpus of 1,000 foundational lessons defined in `eidolon_prime/dataset.py`. This gives the reasoning agents context before your first interaction.
+3. The terminal will display status messages as the Kernel and Cortex come online. When the Collaboration Layer is ready, the program will invite you to type commands or questions. During this boot sequence the Web Growth System automatically crawls and stores the trusted sources you listed in `config.json`, the kernel injects a curated corpus of 1,000 foundational lessons defined in `eidolon_prime/dataset.py`, **and the autonomous trainer performs an initial crawl across Roblox documentation, core coding references, Wikipedia, and Britannica**. These combined seeds give the reasoning agents context before your first interaction.
 
 ### 6. Interact with the System
 1. Begin with simple requests such as `help` or `status` to explore available commands.
 2. Ask Eidolon Prime to perform tasks like generating a small script, analyzing a snippet of code, or proposing a plan for a project.
 3. Teach the engine explicitly by typing commands such as `train data-model: Document the new data validation rules`. The training ground logs your guidance, stores it in the memory web, and gently boosts the engine’s curiosity so it can build on what you taught it. Inputs that look unsafe are blocked before they reach the training subsystem.
-4. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime now synthesizes answers instead of repeating the raw lessons: it blends the thousand-item seed corpus with your bespoke training data, runs quick experiments in the Forge, and responds with a narrative that explains *why* the answer was chosen.
-5. Each response includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, curated evidence snippets from memory, and Reflection Engine rationale so you can inspect the entire reasoning chain.
+4. Launch autonomous learning whenever you like with `atrain` or `atrain <focus>`. The engine will revisit a rotating set of Roblox development guides, programming best practices, and encyclopedia entries, capturing highlights in its memory. Provide a focus keyword such as `atrain roblox economy` to bias the crawl toward matching topics.
+5. Hold a natural conversation with `talk <your message>` (or `chat <your message>`). Eidolon Prime now synthesizes answers instead of repeating the raw lessons: it blends the thousand-item seed corpus with your bespoke training data, runs quick experiments in the Forge, and responds with a narrative that explains *why* the answer was chosen.
+6. Each response includes an explanation of how the decision was made. The included reference implementation streams the exact agent insights, Forge experiment summaries, curated evidence snippets from memory, and Reflection Engine rationale so you can inspect the entire reasoning chain.
 
 ### 7. Review Reasoning Trails
 1. During a session you can type `status` at any time to inspect the live personality vectors and a summary of recorded memories.

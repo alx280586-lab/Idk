@@ -41,6 +41,7 @@ class SecuritySettings:
             "reflect",
             "log",
             "train",
+            "atrain",
             "talk",
             "chat",
         ]

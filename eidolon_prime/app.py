@@ -81,6 +81,11 @@ class EidolonPrimeApp:
                 receipt = self.kernel.train(payload)
                 self.collaboration.render_response(prompt, receipt.render())
                 continue
+            if command == "atrain":
+                self.kernel.enforce_security(command, payload)
+                report = self.kernel.autonomous_train(payload or None)
+                self.collaboration.render_response(prompt, report.render())
+                continue
             if command in {"talk", "chat"}:
                 if not payload:
                     raise ValueError("Scripted talk commands must include a message.")

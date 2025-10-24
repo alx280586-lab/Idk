@@ -49,6 +49,10 @@ class CollaborationLayer:
                     continue
                 self.render_response(prompt, receipt.render())
                 continue
+            if command == "atrain":
+                report = self._kernel.autonomous_train(payload or None)
+                self.render_response(prompt, report.render())
+                continue
             if command in {"talk", "chat"}:
                 if not payload:
                     print("Share a message with 'talk <your thought>'.")
@@ -87,6 +91,7 @@ class CollaborationLayer:
             "  reflect- trigger reflection cycle\n"
             "  log    - ask for a narrative explanation\n"
             "  train  - feed new knowledge into the training ground\n"
+            "  atrain - let Eidolon Prime crawl trusted sources for new lessons\n"
             "  talk   - chat with Eidolon Prime about anything on your mind\n"
             "  exit   - quit the session"
         )
