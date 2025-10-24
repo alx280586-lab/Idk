@@ -1,0 +1,1 @@
+# Eidolon Prime currently relies only on the Python standard library.

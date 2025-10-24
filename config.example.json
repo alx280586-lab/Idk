@@ -1,0 +1,16 @@
+{
+  "resources": {
+    "compute_budget": 0.5,
+    "max_parallel_agents": 3,
+    "experiment_limit": 5
+  },
+  "personality": {
+    "curiosity": 0.5,
+    "confidence": 0.5,
+    "empathy": 0.5,
+    "integrity": 0.8
+  },
+  "security": {
+    "allowed_commands": ["help", "status", "plan", "reflect", "log"]
+  }
+}
