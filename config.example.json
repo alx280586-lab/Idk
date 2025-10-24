@@ -42,6 +42,7 @@
     "unrestricted_access": true,
     "trust_threshold": 0.6,
     "max_open_web_samples": 24,
+    "interactive_research_batch": 12,
     "seeds": [
       {
         "url": "https://example.com/eidolon/primer",

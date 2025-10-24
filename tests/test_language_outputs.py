@@ -49,6 +49,16 @@ class LanguageOutputTests(unittest.TestCase):
             "World briefings should present situation, evidence, implication, and outlook paragraphs.",
         )
 
+    def test_interactive_research_is_logged_in_reasoning(self) -> None:
+        result = self.app.kernel.chat(
+            "Explain advanced Roblox data store sharding strategies for live games."
+        )
+        self.assertIn(
+            "live research",
+            result.analysis.reasoning_summary.lower(),
+            "Chat reasoning should mention the interactive research sweep.",
+        )
+
     def test_smalltalk_stays_concise_and_personal(self) -> None:
         result = self.app.kernel.chat("Hi, how is your day going?")
         paragraphs = self._paragraphs(result.reply)

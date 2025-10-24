@@ -80,6 +80,7 @@ class WebSettings:
     unrestricted_access: bool = True
     trust_threshold: float = 0.6
     max_open_web_samples: int = 24
+    interactive_research_batch: int = 12
     seeds: List[WebSeed] = field(
         default_factory=lambda: [
             WebSeed(

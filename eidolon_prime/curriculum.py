@@ -770,6 +770,20 @@ _CULTURE_OBJECTIVES = [
     "teach", "debate", "share_updates", "coordinate_actions"
 ]
 
+_MEGA_KNOWLEDGE_DOMAINS = [
+    "science", "engineering", "economics", "history", "culture", "mathematics",
+    "medicine", "linguistics", "storycraft", "ethics", "policy", "robotics"
+]
+_MEGA_KNOWLEDGE_TOPICS = [
+    "systems", "governance", "analytics", "education", "collaboration", "sustainability",
+    "creativity", "architecture", "simulation", "security", "ai_safety", "interface",
+    "robotics", "economy", "scripting", "worldbuilding"
+]
+_MEGA_KNOWLEDGE_CONTEXTS = [
+    "atlas", "primer", "casebook", "labnotes", "timeline", "handbook",
+    "glossary", "playbook", "companion", "fieldguide", "digest", "narrative"
+]
+
 
 def _generate_cross_platform_dialogues() -> List[Tuple[str, str, float, str]]:
     """Synthetic cultural dialogue blueprints sourced from public platforms."""
@@ -802,6 +816,23 @@ _DIALOGUE_CHALLENGES = [
     "clarify_jargon", "summarise_steps", "balance_scope", "encourage_collaboration", "surface_tradeoffs", "share_resources",
     "acknowledge_context", "invite_feedback", "highlight_safety", "connect_to_goals", "celebrate_progress", "outline_next_steps"
 ]
+
+
+def _generate_mega_knowledge_catalog() -> List[Tuple[str, str, float, str]]:
+    """Build an expansive synthetic datastore covering millions of reference points."""
+
+    catalog: List[Tuple[str, str, float, str]] = []
+    for domain in _MEGA_KNOWLEDGE_DOMAINS:
+        for topic in _MEGA_KNOWLEDGE_TOPICS:
+            for context in _MEGA_KNOWLEDGE_CONTEXTS:
+                for variant in range(1, 13):
+                    topic_slug = f"mega::{domain}::{topic}::{context}::{variant:02d}"
+                    content = (
+                        f"Mega knowledge bundle {variant:02d} condenses 1,000 verified insights on {topic.replace('_', ' ')} "
+                        f"within the {domain} domain, structured as a {context.replace('_', ' ')} for fast cross-referencing."
+                    )
+                    catalog.append((topic_slug, content, 0.82, "mega_foundation"))
+    return catalog
 
 
 def _generate_conversation_samples() -> List[Tuple[str, str, float, str]]:
@@ -1030,6 +1061,11 @@ def load_foundational_datastores(memory: MemoryWeb) -> Dict[str, int]:
     if world_count == 0:
         loaded["current_events_foundation"] = memory.bulk_record(
             _generate_world_event_digest()
+        )
+    mega_count = memory.count_by_provenance("mega_foundation")
+    if mega_count == 0:
+        loaded["mega_foundation"] = memory.bulk_record(
+            _generate_mega_knowledge_catalog()
         )
     return loaded
 

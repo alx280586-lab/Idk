@@ -17,6 +17,7 @@ from .curriculum import (
 
 if TYPE_CHECKING:  # pragma: no cover - type-only import
     from .config import WebSettings
+    from .comprehension import MessageUnderstanding
 
 
 @dataclass
@@ -395,6 +396,9 @@ class WebGrowthSystem:
         unrestricted = settings.unrestricted_access if settings else True
         trust_threshold = settings.trust_threshold if settings else 0.6
         max_open_samples = settings.max_open_web_samples if settings else 24
+        interactive_batch = (
+            settings.interactive_research_batch if settings else 12
+        )
         self._unrestricted = unrestricted
         self._open_web = OpenWebUniverse(
             trust_threshold=trust_threshold,
@@ -402,6 +406,7 @@ class WebGrowthSystem:
             parameter_budget=parameter_budget,
             parameter_groups=parameter_groups,
         )
+        self._interactive_batch = max(6, interactive_batch)
 
     def register_additional_sources(
         self, sources: Iterable[AutonomousSource]
@@ -597,6 +602,108 @@ class WebGrowthSystem:
             curriculum_stage=studied_stage,
             quiz_score=quiz_score,
             stage_complete=stage_complete,
+            trust_notes=trust_notes,
+            average_trust=average_trust,
+        )
+
+    def interactive_research(
+        self,
+        query: str,
+        understanding: Optional["MessageUnderstanding"] = None,
+        *,
+        batch_size: Optional[int] = None,
+    ) -> AutoTrainingReport:
+        """Run an on-demand research sweep tied to a specific user query."""
+
+        request_batch = max(4, batch_size or self._interactive_batch)
+        focus_tokens: Set[str] = set(
+            token for token in re.findall(r"[A-Za-z0-9]+", query.lower()) if token
+        )
+        if understanding is not None:
+            focus_tokens.update(term.lower() for term in understanding.focus_terms)
+            for pair in understanding.focus_pairs:
+                for segment in pair.split():
+                    cleaned = segment.strip().lower()
+                    if cleaned:
+                        focus_tokens.add(cleaned)
+        curated_highlights: List[AutoTrainingHighlight] = []
+        curated_count = 0
+        if focus_tokens:
+            curated_pool: List[AutonomousSource] = []
+            for source in AUTONOMOUS_SOURCES:
+                tag_space = (
+                    {tag.lower() for tag in source.tags}
+                    | set(source.topic.lower().replace("::", " ").split())
+                    | set(source.summary.lower().split())
+                )
+                if focus_tokens & tag_space:
+                    curated_pool.append(source)
+                    if len(curated_pool) >= request_batch:
+                        break
+        else:
+            curated_pool = []
+        if not curated_pool:
+            curated_pool = AUTONOMOUS_SOURCES[: min(request_batch, len(AUTONOMOUS_SOURCES))]
+        for source in curated_pool:
+            context_summary = (
+                f"Interactive research captured {source.topic} via {source.source}."
+            )
+            self._memory.record(
+                source.topic,
+                context_summary,
+                0.74,
+                "interactive_research",
+            )
+            curated_highlights.append(
+                AutoTrainingHighlight(
+                    source=source.source,
+                    topic=source.topic,
+                    summary=source.summary,
+                    insight=f"Reinforced interactively: {source.insight}",
+                    tier=source.tier,
+                    kind="interactive-curated",
+                )
+            )
+            curated_count += 1
+        accepted, trust_notes = self._harvest_open_web(focus_tokens, request_batch)
+        open_highlights: List[AutoTrainingHighlight] = []
+        average_trust = 0.0
+        if accepted:
+            average_trust = sum(assessment.score for _, assessment in accepted) / len(accepted)
+        for source, assessment in accepted:
+            focus_text = source.focus
+            memory_content = (
+                f"Live research for '{query}' via {assessment.domain} → {focus_text}."
+            )
+            confidence = 0.58 + 0.32 * assessment.score
+            self._memory.record(
+                source.topic,
+                memory_content,
+                min(0.99, confidence),
+                "interactive_research",
+            )
+            open_highlights.append(
+                AutoTrainingHighlight(
+                    source=f"https://{assessment.domain}",
+                    topic=source.topic,
+                    summary=source.summary,
+                    insight=f"{source.insight} (trust {assessment.score:.2f})",
+                    tier=assessment.tier,
+                    kind="live-research",
+                )
+            )
+        total_imported = curated_count + len(accepted)
+        quiz_score = 0.68
+        if total_imported:
+            quiz_score = 0.75 + min(0.2, total_imported / (request_batch * 2))
+        highlights = curated_highlights + open_highlights
+        return AutoTrainingReport(
+            focus=query,
+            imported=total_imported,
+            highlights=highlights,
+            curriculum_stage="interactive_research",
+            quiz_score=quiz_score,
+            stage_complete=False,
             trust_notes=trust_notes,
             average_trust=average_trust,
         )

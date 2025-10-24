@@ -264,6 +264,7 @@ class Kernel:
         understanding.researched_terms = gap_report.resolved_terms()
         understanding.coding_terms = list(dict.fromkeys(gap_report.coding_terms))
         gap_resolution_notes: List[str] = []
+        live_report: AutoTrainingReport | None = None
         unresolved_gaps = gap_report.unresolved()
         max_gap_checks = min(3, len(unresolved_gaps))
         for gap in unresolved_gaps[:max_gap_checks]:
@@ -282,6 +283,19 @@ class Kernel:
         understanding.researched_terms = list(
             dict.fromkeys(gap_report.resolved_terms())
         )
+        if not is_smalltalk and self._config.web.interactive_research_batch:
+            live_report = self._web_growth.interactive_research(
+                message,
+                understanding,
+                batch_size=self._config.web.interactive_research_batch,
+            )
+            if live_report.imported:
+                self._memory.record(
+                    "conversation::live_research",
+                    live_report.render(),
+                    0.7,
+                    "interactive_research",
+                )
         self._speech.observe_message(message, self._memory)
         plan = self._synthetic.plan(message, understanding, self._memory)
         analysis = self._cortex.process(
@@ -360,6 +374,17 @@ class Kernel:
                     plan,
                     analysis.orchestration,
                 )
+        if live_report and live_report.imported and not is_smalltalk:
+            addition = (
+                "Live research consulted "
+                f"{live_report.imported} sources (avg trust {live_report.average_trust:.2f})."
+            )
+            if live_report.trust_notes:
+                addition += " " + " ".join(live_report.trust_notes[:2])
+            if analysis.reasoning_summary:
+                analysis.reasoning_summary += "\n\n" + addition
+            else:
+                analysis.reasoning_summary = addition
         if gap_report.resolved_terms() and not is_smalltalk:
             reinforcement = ", ".join(gap_report.resolved_terms()[:4])
             addition = (
