@@ -108,6 +108,30 @@ _DEFAULT_PATTERNS: Tuple[ConversationPattern, ...] = (
         register="engineering",
         success_score_by_context={"global": 0.64},
     ),
+    ConversationPattern(
+        pattern_id="essay.argument.synthesis",
+        intent="essay",
+        tone="reflective",
+        structure="thesis→support→contrast→synthesis→next-step",
+        register="essay_formal",
+        success_score_by_context={"global": 0.66},
+    ),
+    ConversationPattern(
+        pattern_id="creative.story.arc",
+        intent="creative",
+        tone="imaginative",
+        structure="hook→development→turn→resolution→reflection",
+        register="creative_narrative",
+        success_score_by_context={"global": 0.65},
+    ),
+    ConversationPattern(
+        pattern_id="news.world.briefing",
+        intent="current_events",
+        tone="steady",
+        structure="situation→evidence→implication→outlook",
+        register="current_affairs",
+        success_score_by_context={"global": 0.64},
+    ),
 )
 
 

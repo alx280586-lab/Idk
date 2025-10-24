@@ -4,6 +4,72 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple
 
+_ROBLOX_SNIPPETS: Dict[str, str] = {
+    "quest": "\n".join(
+        [
+            "```lua",
+            "local QuestOrchestrator = {}",
+            "",
+            "local ServerStorage = game:GetService(\"ServerStorage\")",
+            "local MessagingService = game:GetService(\"MessagingService\")",
+            "",
+            "function QuestOrchestrator.publishQuest(definition)",
+            "    assert(definition.id, \"Quest definition requires an id\")",
+            "    definition.cooldown = definition.cooldown or 120",
+            "    definition.reward = definition.reward or {currency = \"Coins\", amount = 50}",
+            "    MessagingService:PublishAsync(\"quests:new\", definition)",
+            "end",
+            "",
+            "return QuestOrchestrator",
+            "```",
+        ]
+    ),
+    "economy": "\n".join(
+        [
+            "```lua",
+            "local EconomyBalancer = {}",
+            "",
+            "local MarketplaceService = game:GetService(\"MarketplaceService\")",
+            "",
+            "local state = {",
+            "    velocity = 1.0,",
+            "    targetVelocity = 1.35,",
+            "    smoothing = 0.12,",
+            "}",
+            "",
+            "function EconomyBalancer.trackPurchase(player, productId, amount)",
+            "    if state.velocity > 1.5 then",
+            "        MarketplaceService:PerformPurchase(player, productId, amount * 0.85)",
+            "    else",
+            "        MarketplaceService:PerformPurchase(player, productId, amount)",
+            "    end",
+            "end",
+            "",
+            "return EconomyBalancer",
+            "```",
+        ]
+    ),
+    "telemetry": "\n".join(
+        [
+            "```lua",
+            "local SessionInsights = {}",
+            "",
+            "local HttpService = game:GetService(\"HttpService\")",
+            "",
+            "local ENDPOINT = \"https://telemetry.example.com/events\"",
+            "",
+            "function SessionInsights.emit(eventName, payload)",
+            "    payload.timestamp = os.time()",
+            "    payload.event = eventName",
+            "    HttpService:PostAsync(ENDPOINT, HttpService:JSONEncode(payload))",
+            "end",
+            "",
+            "return SessionInsights",
+            "```",
+        ]
+    ),
+}
+
 
 @dataclass
 class SemanticFrame:
@@ -163,6 +229,48 @@ _DEFAULT_TEMPLATES: Tuple[GrammarTemplate, ...] = (
         register_tags=("dialogue_support", "balanced"),
         variation_ops=("invite_followup", "shuffle_support"),
     ),
+    GrammarTemplate(
+        template_id="essay_argument",
+        rhetorical_function="essay",
+        slots={
+            "introduction": "{opener} {thesis_hook}",
+            "thesis": "{thesis_sentence}",
+            "support": "{support_sentence}",
+            "contrast": "{contrast_sentence}",
+            "synthesis": "{synthesis_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("essay_formal",),
+        variation_ops=("cause_effect", "highlight_decision"),
+    ),
+    GrammarTemplate(
+        template_id="creative_arc",
+        rhetorical_function="creative",
+        slots={
+            "introduction": "{opener} {creative_hook_sentence}",
+            "hook": "{creative_hook_detail}",
+            "development": "{connector} {creative_development_sentence}",
+            "turn": "{connector} {creative_turn_sentence}",
+            "resolution": "{connector} {creative_resolution_sentence}",
+            "reflection": "{creative_reflection_sentence}",
+        },
+        register_tags=("creative_narrative",),
+        variation_ops=("amplify_emotion",),
+    ),
+    GrammarTemplate(
+        template_id="news_briefing",
+        rhetorical_function="current_events",
+        slots={
+            "introduction": "{opener} {world_context_sentence}",
+            "situation": "{world_situation_sentence}",
+            "evidence": "{world_evidence_sentence}",
+            "implication": "{world_implication_sentence}",
+            "outlook": "{world_outlook_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("current_affairs",),
+        variation_ops=("cause_effect",),
+    ),
 )
 
 
@@ -249,6 +357,56 @@ _DEFAULT_REGISTERS: Tuple[RegisterPack, ...] = (
         ),
         hedges=("technically", "precisely", "code-wise"),
     ),
+    RegisterPack(
+        name="essay_formal",
+        openers=(
+            "Let's outline the argument carefully.",
+            "Here is the thesis I'm advancing.",
+            "I'll develop the case step by step.",
+        ),
+        connectors=("First,", "Next,", "Furthermore"),
+        closings=(
+            "That synthesis keeps the essay focused and defensible.",
+            "We can expand each paragraph with citations if you need more depth.",
+        ),
+        hedges=("formally", "precisely"),
+    ),
+    RegisterPack(
+        name="creative_narrative",
+        openers=(
+            "Let's open in motion.",
+            "Picture the first beat vividly.",
+            "We'll set the tone immediately.",
+        ),
+        connectors=(
+            "As the scene unfolds,",
+            "When the tension spikes,",
+            "From the character's view,",
+        ),
+        closings=(
+            "That cadence leaves room for another chapter.",
+            "Carry the emotional thread into the next vignette.",
+        ),
+        hedges=("imaginatively", "boldly"),
+    ),
+    RegisterPack(
+        name="current_affairs",
+        openers=(
+            "Here's what the latest verified reports show.",
+            "I'll brief you on today's landscape.",
+            "Let's anchor the update in current data.",
+        ),
+        connectors=(
+            "In parallel,",
+            "Data from partners notes",
+            "Analysts highlight",
+        ),
+        closings=(
+            "I'll keep monitoring feeds for significant shifts.",
+            "Ping me if you need deeper sourcing on any thread.",
+        ),
+        hedges=("currently", "notably"),
+    ),
 )
 
 
@@ -279,6 +437,9 @@ class GrammarDatastore:
             "greet→clarify→respond→reflect": "dialogue_loop",
             "diagnose→code→next-step": "code_review_sequence",
             "teach→code→recap": "code_review_sequence",
+            "thesis→support→contrast→synthesis→next-step": "essay_argument",
+            "hook→development→turn→resolution→reflection": "creative_arc",
+            "situation→evidence→implication→outlook": "news_briefing",
         }
         template_id = lookup.get(structure, "acknowledge_analyse")
         return self._templates[template_id]
@@ -335,6 +496,22 @@ class GrammarDatastore:
         code_reasoning_sentence = self._compose_code_reasoning_sentence(frame, hedge)
         coding_evidence_sentence = self._compose_coding_evidence_sentence(frame)
         coding_action_sentence = self._compose_coding_action_sentence(frame)
+        thesis_hook = self._compose_thesis_hook(frame)
+        thesis_sentence = self._compose_thesis_sentence(frame, hedge)
+        support_sentence = self._compose_support_sentence(frame)
+        contrast_sentence = self._compose_contrast_sentence(frame)
+        synthesis_sentence = self._compose_synthesis_sentence(frame)
+        creative_hook_sentence = self._compose_creative_hook_sentence(frame)
+        creative_hook_detail = self._compose_creative_hook_detail(frame)
+        creative_development_sentence = self._compose_creative_development_sentence(frame)
+        creative_turn_sentence = self._compose_creative_turn_sentence(frame)
+        creative_resolution_sentence = self._compose_creative_resolution_sentence(frame)
+        creative_reflection_sentence = self._compose_creative_reflection_sentence(frame, closing)
+        world_context_sentence = self._compose_world_context_sentence(frame)
+        world_situation_sentence = self._compose_world_situation_sentence(frame)
+        world_evidence_sentence = self._compose_world_evidence_sentence(frame)
+        world_implication_sentence = self._compose_world_implication_sentence(frame)
+        world_outlook_sentence = self._compose_world_outlook_sentence(frame)
         return {
             "opener": opener,
             "connector": connector,
@@ -357,6 +534,22 @@ class GrammarDatastore:
             "code_reasoning_sentence": code_reasoning_sentence,
             "coding_evidence_sentence": coding_evidence_sentence,
             "coding_action_sentence": coding_action_sentence,
+            "thesis_hook": thesis_hook,
+            "thesis_sentence": thesis_sentence,
+            "support_sentence": support_sentence,
+            "contrast_sentence": contrast_sentence,
+            "synthesis_sentence": synthesis_sentence,
+            "creative_hook_sentence": creative_hook_sentence,
+            "creative_hook_detail": creative_hook_detail,
+            "creative_development_sentence": creative_development_sentence,
+            "creative_turn_sentence": creative_turn_sentence,
+            "creative_resolution_sentence": creative_resolution_sentence,
+            "creative_reflection_sentence": creative_reflection_sentence,
+            "world_context_sentence": world_context_sentence,
+            "world_situation_sentence": world_situation_sentence,
+            "world_evidence_sentence": world_evidence_sentence,
+            "world_implication_sentence": world_implication_sentence,
+            "world_outlook_sentence": world_outlook_sentence,
         }
 
     def _compose_analysis_sentence(self, frame: SemanticFrame, hedge: str) -> str:
@@ -395,10 +588,128 @@ class GrammarDatastore:
         return "I'll cross-check trusted repositories and specifications to anchor the implementation."
 
     def _compose_coding_action_sentence(self, frame: SemanticFrame) -> str:
+        snippet = self._extract_code_snippet(frame.evidence)
+        if snippet:
+            return (
+                "I'll translate that into code by stitching this Luau blueprint:\n"
+                + snippet
+            )
+        message_text = frame.user_message.lower()
+        if "roblox" in message_text and "script" in message_text:
+            for keyword, code in _ROBLOX_SNIPPETS.items():
+                if keyword in message_text:
+                    return (
+                        "I'll translate that into code by stitching this Luau blueprint:\n"
+                        + code
+                    )
+            return (
+                "I'll translate that into code by stitching this Luau blueprint:\n"
+                + _ROBLOX_SNIPPETS["quest"]
+            )
         if frame.actions:
             step = self._tidy(frame.actions[0])
             return f"I'll translate that into code by {step}."
         return "I'll sketch function signatures and test cases so the code path is well reasoned."
+
+    def _compose_thesis_hook(self, frame: SemanticFrame) -> str:
+        topic = frame.condensed_topic()
+        return f"We're developing an argument that orbits {topic}."
+
+    def _compose_thesis_sentence(self, frame: SemanticFrame, hedge: str) -> str:
+        if frame.key_points:
+            thesis = self._tidy(frame.key_points[0])
+            prefix = f"{hedge.capitalize()} " if hedge else "Formally, "
+            return f"{prefix}the thesis is that {thesis}."
+        return "Formally, the thesis is that thoughtful design choices uphold player trust."
+
+    def _compose_support_sentence(self, frame: SemanticFrame) -> str:
+        if frame.evidence:
+            support = self._tidy(frame.evidence[0])
+            return f"We support it with evidence like {support}."
+        return "We support it with curated creative-writing drills and verified Roblox playbooks."
+
+    def _compose_contrast_sentence(self, frame: SemanticFrame) -> str:
+        if len(frame.key_points) > 1:
+            contrast = self._tidy(frame.key_points[1])
+            return f"A counter-weight considers {contrast}."
+        if frame.evidence and len(frame.evidence) > 1:
+            return f"A contrasting signal notes {self._tidy(frame.evidence[1])}."
+        return "We acknowledge opposing pressures such as scope creep or pacing fatigue."
+
+    def _compose_synthesis_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            synthesis = self._tidy(frame.actions[0])
+            return f"The synthesis is to {synthesis}."
+        if frame.outcome:
+            return f"The synthesis is to honour the outcome: {self._tidy(frame.outcome)}."
+        return "The synthesis is to test ideas in stages and cite results transparently."
+
+    def _compose_creative_hook_sentence(self, frame: SemanticFrame) -> str:
+        topic = frame.condensed_topic()
+        return f"We drop into {topic} with a sensory-rich opening beat."
+
+    def _compose_creative_hook_detail(self, frame: SemanticFrame) -> str:
+        if frame.key_points:
+            detail = self._tidy(frame.key_points[0])
+            return f"The first paragraph anchors on {detail}."
+        return "The first paragraph sketches the protagonist's immediate stakes."
+
+    def _compose_creative_development_sentence(self, frame: SemanticFrame) -> str:
+        if frame.evidence:
+            development = self._tidy(frame.evidence[0])
+            return f"As the scene builds, weave in {development}."
+        return "As the scene builds, interleave dialogue with textural detail to keep momentum."
+
+    def _compose_creative_turn_sentence(self, frame: SemanticFrame) -> str:
+        if len(frame.key_points) > 1:
+            turn = self._tidy(frame.key_points[1])
+            return f"When tension peaks, pivot through {turn}."
+        return "When tension peaks, pivot through an unexpected choice that still honours prior foreshadowing."
+
+    def _compose_creative_resolution_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            action = self._tidy(frame.actions[0])
+            return f"Resolve the beat by {action}."
+        return "Resolve the beat by rewarding the character's growth without closing future doors."
+
+    def _compose_creative_reflection_sentence(
+        self, frame: SemanticFrame, closing: str
+    ) -> str:
+        if frame.outcome:
+            reflection = self._tidy(frame.outcome)
+            return f"{reflection} {closing}".strip()
+        return closing
+
+    def _compose_world_context_sentence(self, frame: SemanticFrame) -> str:
+        topic = frame.condensed_topic()
+        return f"Current feeds highlight {topic}."
+
+    def _compose_world_situation_sentence(self, frame: SemanticFrame) -> str:
+        if frame.key_points:
+            situation = self._tidy(frame.key_points[0])
+            return f"Situation: {situation}."
+        return "Situation: verified sources summarise the headline trend."
+
+    def _compose_world_evidence_sentence(self, frame: SemanticFrame) -> str:
+        if frame.evidence:
+            evidence = self._tidy(frame.evidence[0])
+            return f"Evidence: {evidence}."
+        return "Evidence: I cite timestamped entries from the current events datastore."
+
+    def _compose_world_implication_sentence(self, frame: SemanticFrame) -> str:
+        if len(frame.key_points) > 1:
+            implication = self._tidy(frame.key_points[1])
+            return f"Implication: {implication}."
+        if frame.actions:
+            return f"Implication: we can {self._tidy(frame.actions[0])}."
+        return "Implication: expect downstream changes in community planning and platform policy."
+
+    def _compose_world_outlook_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions and len(frame.actions) > 1:
+            return f"Outlook: next we {self._tidy(frame.actions[1])}."
+        if frame.outcome:
+            return f"Outlook: {self._tidy(frame.outcome)}."
+        return "Outlook: I'll continue refreshing the world model as new reports land."
 
     def _compose_diagnosis_sentence(
         self, frame: SemanticFrame, hedge: str
@@ -471,6 +782,24 @@ class GrammarDatastore:
             cleaned = cleaned[:-1]
         return cleaned
 
+    def _extract_code_snippet(self, evidence_lines: Sequence[str]) -> str | None:
+        for line in evidence_lines:
+            _, _, remainder = line.partition("→")
+            snippet = remainder.strip() if remainder else line.strip()
+            if "(confidence" in snippet:
+                snippet = snippet.rsplit("(confidence", 1)[0].strip()
+            if "```" in snippet:
+                start = snippet.find("```")
+                code = snippet[start:]
+                if not code.strip():
+                    continue
+                return code
+            if "game:GetService" in snippet:
+                body = snippet
+                if "```lua" not in body:
+                    body = "```lua\n" + body + "\n```"
+                return body
+        return None
 
 class LanguageEngine:
     """Transforms semantic frames into conversational replies."""
@@ -496,6 +825,14 @@ class LanguageEngine:
             score = self._score_candidate(candidate)
             candidates.append((score, candidate))
         best_score, best_text = max(candidates, key=lambda item: item[0])
+        lowered_message = frame.user_message.lower()
+        if "roblox" in lowered_message and "script" in lowered_message:
+            for keyword, code in _ROBLOX_SNIPPETS.items():
+                if keyword in lowered_message:
+                    best_text += "\n\n" + code
+                    break
+            else:
+                best_text += "\n\n" + _ROBLOX_SNIPPETS["quest"]
         lexical = self._lexical_variety(best_text)
         return best_text, lexical
 
@@ -533,6 +870,31 @@ class LanguageEngine:
         intro_text = " ".join(part for part in intro if part).strip()
         if intro_text:
             paragraphs.append(intro_text)
+        essay_segments = {"thesis", "support", "contrast", "synthesis"}
+        creative_segments = {"hook", "development", "turn", "resolution", "reflection"}
+        news_segments = {"situation", "evidence", "implication", "outlook"}
+        if essay_segments.intersection(structure_parts):
+            for key in ("thesis", "support", "contrast", "synthesis"):
+                sentence = slots.get(key)
+                if sentence:
+                    paragraphs.append(sentence)
+            if slots.get("closing"):
+                paragraphs.append(slots["closing"])
+            return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
+        if creative_segments.intersection(structure_parts):
+            for key in ("hook", "development", "turn", "resolution", "reflection"):
+                sentence = slots.get(key)
+                if sentence:
+                    paragraphs.append(sentence)
+            return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
+        if news_segments.intersection(structure_parts):
+            for key in ("situation", "evidence", "implication", "outlook"):
+                sentence = slots.get(key)
+                if sentence:
+                    paragraphs.append(sentence)
+            if slots.get("closing"):
+                paragraphs.append(slots["closing"])
+            return [paragraph.strip() for paragraph in paragraphs if paragraph.strip()]
         body_sentences: List[str] = []
         for segment in structure_parts:
             key = self._segment_to_slot(segment)
@@ -566,6 +928,7 @@ class LanguageEngine:
             "analysis": "analysis",
             "summary": "closing",
             "lesson": "analysis",
+            "contrast": "contrast",
             "compare": "comparison",
             "decide": "decision",
             "decision": "decision",
@@ -574,6 +937,17 @@ class LanguageEngine:
             "respond": "analysis",
             "greet": "introduction",
             "code": "analysis",
+            "thesis": "thesis",
+            "support": "support",
+            "synthesis": "synthesis",
+            "hook": "hook",
+            "development": "development",
+            "turn": "turn",
+            "resolution": "resolution",
+            "reflection": "reflection",
+            "situation": "situation",
+            "implication": "implication",
+            "outlook": "outlook",
         }
         return mapping.get(segment, "analysis")
 

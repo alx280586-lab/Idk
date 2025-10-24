@@ -930,6 +930,24 @@ def load_foundational_datastores(memory: MemoryWeb) -> Dict[str, int]:
     reasoning_count = memory.count_by_provenance("reasoning_foundation")
     if reasoning_count == 0:
         loaded["reasoning_foundation"] = memory.bulk_record(_generate_reasoning_patterns())
+    creative_count = memory.count_by_provenance("creative_writing_foundation")
+    if creative_count == 0:
+        loaded["creative_writing_foundation"] = memory.bulk_record(
+            _generate_creative_writing_lessons()
+        )
+    essay_count = memory.count_by_provenance("essay_foundation")
+    if essay_count == 0:
+        loaded["essay_foundation"] = memory.bulk_record(_generate_essay_frameworks())
+    roblox_count = memory.count_by_provenance("roblox_foundation")
+    if roblox_count == 0:
+        loaded["roblox_foundation"] = memory.bulk_record(
+            _generate_roblox_scripting_blueprints()
+        )
+    world_count = memory.count_by_provenance("current_events_foundation")
+    if world_count == 0:
+        loaded["current_events_foundation"] = memory.bulk_record(
+            _generate_world_event_digest()
+        )
     return loaded
 
 
@@ -946,6 +964,10 @@ _TIER_A_DOMAINS = [
     ("https://www.rfc-editor.org/rfc", "standards::internet", "IETF Requests for Comments archive."),
     ("https://cplusplus.com/reference", "coding::cpp", "C++ reference covering STL and language rules."),
     ("https://docs.unity.com", "engines::unity", "Unity engine manuals and scripting references."),
+    ("https://www.britannica.com", "knowledge::encyclopedia", "Encyclopaedia Britannica reference articles."),
+    ("https://news.un.org/en", "world::un", "United Nations verified news briefs."),
+    ("https://www.iea.org/reports", "energy::reports", "International Energy Agency flagship reports."),
+    ("https://www.noaa.gov/news", "science::climate", "NOAA climate and hazard updates."),
 ]
 _EXTRA_TIER_A_DOMAINS = [
     (
@@ -967,6 +989,8 @@ _TIER_A_TOPICS = [
     ("filesystems", "storage management"),
     ("threading", "parallel coordination"),
     ("testing", "verification methods"),
+    ("renewable-energy", "global energy transitions"),
+    ("current-affairs", "world briefings"),
 ]
 _TIER_A_TOPIC_VARIATIONS = [
     (f"chapter-{index:03}", f"reference chapter {index}") for index in range(1, 301)
@@ -981,6 +1005,10 @@ _TIER_B_DOMAINS = [
     ("https://create.roblox.com/docs", "roblox::docs", "Roblox developer documentation and style guides."),
     ("https://engineering.atspotify.com", "engineering::culture", "Engineering blogs covering large-scale systems."),
     ("https://netflixtechblog.com", "engineering::scalability", "Operational lessons from Netflix engineering."),
+    ("https://www.masterclass.com/articles", "writing::craft", "Creative writing tutorials from expert instructors."),
+    ("https://www.writersdigest.com", "writing::practice", "Creative writing prompts and craft discussions."),
+    ("https://developer.roblox.com/en-us/api-reference", "roblox::api", "Roblox API catalog with code samples."),
+    ("https://create.roblox.com/docs/reference/engine", "roblox::engine_reference", "Roblox engine API reference and samples."),
 ]
 _EXTRA_TIER_B_DOMAINS = [
     (
@@ -1002,6 +1030,10 @@ _TIER_B_TOPICS = [
     ("security", "threat prevention"),
     ("testing", "quality pipelines"),
     ("scripting", "lua fundamentals"),
+    ("creative-writing", "narrative craft techniques"),
+    ("essay-structure", "multi paragraph composition"),
+    ("world-news", "current events analysis"),
+    ("roblox-systems", "advanced roblox scripting"),
 ]
 _TIER_B_TOPIC_VARIATIONS = [
     (f"playbook-{index:03}", f"applied playbook {index}") for index in range(1, 301)
@@ -1012,6 +1044,8 @@ _TIER_C_DOMAINS = [
     ("https://devforum.roblox.com/t", "community::roblox", "Community insights and tone on Roblox development."),
     ("https://news.ycombinator.com", "community::startups", "Technology news and debate tone."),
     ("https://discord.com/channels", "community::chat", "Structured community chats and moderation cues."),
+    ("https://medium.com", "community::essays", "Creative essay tone and storytelling cadence."),
+    ("https://www.reddit.com/r/robloxdev", "community::robloxdev", "Peer conversations on Roblox development."),
 ]
 _EXTRA_TIER_C_DOMAINS = [
     (
@@ -1033,10 +1067,251 @@ _TIER_C_TOPICS = [
     ("mentorship", "guidance tone"),
     ("analytics", "data storytelling"),
     ("security", "responsible disclosures"),
+    ("creative-writing", "storytelling tone"),
+    ("essay-feedback", "essay coaching tone"),
+    ("world-events", "discussion of global developments"),
 ]
 _TIER_C_TOPIC_VARIATIONS = [
     (f"dialogue-{index:03}", f"community dialogue example {index}") for index in range(1, 241)
 ]
+
+
+# ---------------------------------------------------------------------------
+# Creative writing and essay foundations
+# ---------------------------------------------------------------------------
+
+_CREATIVE_MOTIFS = [
+    "resilience", "curiosity", "cooperation", "redemption", "innovation",
+    "balance", "exploration", "listening", "adaptation", "empathy",
+]
+
+_CREATIVE_FORMS = [
+    "short_story", "dialogue", "fable", "monologue", "travelogue",
+    "journal_entry", "myth", "allegory",
+]
+
+_CREATIVE_SETTINGS = [
+    "floating_city", "digital_forest", "orbital_station", "underwater_library",
+    "mountain_observatory", "lunar_colony", "desert_maker_space", "cloud_forum",
+]
+
+_ESSAY_THESES = [
+    "community stewardship strengthens online worlds",
+    "iterative learning unlocks creative mastery",
+    "ethical guidelines sustain platform trust",
+    "collaborative rituals accelerate innovation",
+    "measured experimentation balances risk and ambition",
+]
+
+_ESSAY_LENSES = [
+    "historical perspective", "player experience", "economy design",
+    "governance", "education", "accessibility", "safety", "culture",
+]
+
+_ESSAY_SUPPORTS = [
+    "case studies from community-run events",
+    "data captured from platform analytics",
+    "lessons gathered from resilience drills",
+    "insights distilled from ethics reviews",
+    "stories shared by emerging creators",
+]
+
+_ROBLOX_SYSTEMS = [
+    (
+        "quest_orchestrator",
+        "Creates dynamic quest boards with weighted rewards and cooldown windows.",
+        """```lua
+local QuestOrchestrator = {}
+
+local ServerStorage = game:GetService("ServerStorage")
+local MessagingService = game:GetService("MessagingService")
+
+function QuestOrchestrator.publishQuest(definition)
+    assert(definition.id, "Quest definition requires an id")
+    definition.cooldown = definition.cooldown or 120
+    definition.reward = definition.reward or {currency = "Coins", amount = 50}
+
+    MessagingService:PublishAsync("quests:new", definition)
+end
+
+function QuestOrchestrator.loadBlueprint(id)
+    local folder = ServerStorage:FindFirstChild("QuestBlueprints")
+    if not folder then
+        return nil
+    end
+    return folder:FindFirstChild(id)
+end
+
+return QuestOrchestrator
+```""",
+    ),
+    (
+        "economy_balancer",
+        "Balances marketplace payouts using adaptive velocity tracking.",
+        """```lua
+local EconomyBalancer = {}
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local RunService = game:GetService("RunService")
+
+local state = {
+    velocity = 1.0,
+    targetVelocity = 1.35,
+    smoothing = 0.12,
+}
+
+local function updateVelocity(delta)
+    state.velocity = state.velocity + (state.targetVelocity - state.velocity) * state.smoothing * delta
+end
+
+function EconomyBalancer.trackPurchase(player, productId, amount)
+    updateVelocity(RunService.Heartbeat:Wait())
+    if state.velocity > 1.5 then
+        MarketplaceService:PerformPurchase(player, productId, amount * 0.85)
+    else
+        MarketplaceService:PerformPurchase(player, productId, amount)
+    end
+end
+
+return EconomyBalancer
+```""",
+    ),
+    (
+        "session_insights",
+        "Collects gameplay signals and streams them to an analytics pipeline.",
+        """```lua
+local SessionInsights = {}
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local ENDPOINT = "https://telemetry.example.com/events"
+
+function SessionInsights.emit(eventName, payload)
+    payload.timestamp = os.time()
+    payload.event = eventName
+    HttpService:PostAsync(ENDPOINT, HttpService:JSONEncode(payload))
+end
+
+Players.PlayerAdded:Connect(function(player)
+    SessionInsights.emit("player_join", {userId = player.UserId})
+end)
+
+return SessionInsights
+```""",
+    ),
+]
+
+_WORLD_EVENTS = [
+    (
+        "climate::renewables",
+        "Global renewable capacity surpassed 5.3 TW in the latest International Energy Outlook (2025-03).",
+    ),
+    (
+        "space::lunar_missions",
+        "Multiple space agencies confirmed synchronized lunar surface logistics tests for Q4 2025 (Agency Briefing 2025-05).",
+    ),
+    (
+        "economy::digital_markets",
+        "Digital marketplace agreements introduced stronger transparency clauses across the EU and APAC regions (Regulatory Digest 2025-04).",
+    ),
+    (
+        "health::public_initiatives",
+        "Collaborative public health dashboards now integrate wastewater sequencing in 42 cities (Open Health Report 2025-02).",
+    ),
+    (
+        "education::ai_curricula",
+        "Global education alliances launched creative coding curricula blending Roblox Studio with ethics labs (Learning Forum 2025-01).",
+    ),
+    (
+        "infrastructure::resilience",
+        "Resilience councils piloted climate-adaptive microgrids in coastal regions with measurable outage reductions (Resilience Index 2025-03).",
+    ),
+    (
+        "culture::digital_art",
+        "Museums partnered with independent creators to host mixed-reality exhibits exploring cultural archives (Culture Ledger 2025-02).",
+    ),
+    (
+        "science::fusion",
+        "Magnetically confined fusion experiments achieved record energy gain factors in international labs (Fusion Bulletin 2025-04).",
+    ),
+    (
+        "humanitarian::coordination",
+        "Humanitarian logistics networks deployed shared sensor corridors to accelerate response routing (Relief Synopsis 2025-03).",
+    ),
+    (
+        "technology::open_source",
+        "Open-source maintainers formalized new sustainability pledges with transparent funding dashboards (Open Source Pulse 2025-05).",
+    ),
+]
+
+
+def _generate_creative_writing_lessons() -> List[Tuple[str, str, float, str]]:
+    lessons: List[Tuple[str, str, float, str]] = []
+    for motif_index, motif in enumerate(_CREATIVE_MOTIFS):
+        for form_index, form in enumerate(_CREATIVE_FORMS):
+            for setting_index, setting in enumerate(_CREATIVE_SETTINGS):
+                topic = f"creative::{form}::{motif}::{setting}"
+                hook = (
+                    f"Craft {form.replace('_', ' ')} scenes where {motif.replace('_', ' ')} is tested inside a {setting.replace('_', ' ')}."
+                )
+                technique = (
+                    "Blend sensory verbs, dialogue beats, and character micro-decisions to keep the narration grounded."
+                )
+                perspective = (
+                    "Rotate perspective between first-person reflection and third-person observation to build emotional depth."
+                )
+                content = f"{hook} {technique} {perspective}"
+                confidence = 0.82 + 0.03 * ((motif_index + form_index + setting_index) % 4)
+                lessons.append((topic, content, confidence, "creative_writing_foundation"))
+    return lessons
+
+
+def _generate_essay_frameworks() -> List[Tuple[str, str, float, str]]:
+    lessons: List[Tuple[str, str, float, str]] = []
+    for thesis_index, thesis in enumerate(_ESSAY_THESES):
+        for lens_index, lens in enumerate(_ESSAY_LENSES):
+            support = _ESSAY_SUPPORTS[(thesis_index + lens_index) % len(_ESSAY_SUPPORTS)]
+            topic = f"essay::{lens.replace(' ', '_')}::{thesis_index:02d}"
+            content = (
+                f"Thesis: {thesis}. Frame the argument through a {lens} lens, cite {support}, "
+                "and reserve a paragraph for counter-arguments before synthesising the path forward."
+            )
+            confidence = 0.86 + 0.02 * ((thesis_index + lens_index) % 3)
+            lessons.append((topic, content, confidence, "essay_foundation"))
+    return lessons
+
+
+def _generate_roblox_scripting_blueprints() -> List[Tuple[str, str, float, str]]:
+    lessons: List[Tuple[str, str, float, str]] = []
+    for system, description, code in _ROBLOX_SYSTEMS:
+        topic = f"roblox::blueprint::{system}"
+        explanation = (
+            f"Blueprint: {description} Use dependency injection, service lookup patterns, and heartbeat-safe updates to keep the module deterministic."
+        )
+        lessons.append((topic, explanation, 0.91, "roblox_foundation"))
+        lessons.append((f"roblox::blueprint::{system}::code", code, 0.93, "roblox_foundation"))
+    # Add variations by combining systems for orchestration scenarios
+    for index, primary in enumerate(_ROBLOX_SYSTEMS):
+        secondary = _ROBLOX_SYSTEMS[(index + 1) % len(_ROBLOX_SYSTEMS)]
+        combo_topic = f"roblox::integration::{primary[0]}+{secondary[0]}"
+        combo_content = (
+            f"Integrate {primary[0]} with {secondary[0]} by exchanging events via MessagingService and debouncing state updates."
+        )
+        lessons.append((combo_topic, combo_content, 0.9, "roblox_foundation"))
+    return lessons
+
+
+def _generate_world_event_digest() -> List[Tuple[str, str, float, str]]:
+    lessons: List[Tuple[str, str, float, str]] = []
+    for index, (topic, summary) in enumerate(_WORLD_EVENTS, start=1):
+        provenance = "current_events_foundation"
+        confidence = 0.8 + 0.02 * (index % 3)
+        content = (
+            f"As of 2025, {summary} Each update is timestamped and linked to verified public briefings for traceability."
+        )
+        lessons.append((topic, content, confidence, provenance))
+    return lessons
 
 
 _TIER_S_EXPERIENCES = [

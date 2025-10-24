@@ -355,7 +355,15 @@ class Kernel:
             )
         intent, affect = self._infer_intent_and_affect(message, understanding)
         pattern = self._conversation.select_pattern(intent, affect)
-        if understanding.coding_terms and pattern.structure != "diagnose→code→next-step":
+        if intent == "current_events":
+            briefing_pattern = self._conversation.get_pattern("news.world.briefing")
+            if briefing_pattern is not None:
+                pattern = briefing_pattern
+        if (
+            understanding.coding_terms
+            and pattern.structure != "diagnose→code→next-step"
+            and pattern.intent not in {"essay", "creative", "current_events"}
+        ):
             for candidate in self._conversation.all_patterns():
                 if candidate.pattern_id == "code.review.sequence":
                     pattern = candidate
@@ -402,9 +410,14 @@ class Kernel:
             collective,
             smalltalk=is_smalltalk,
         )
-        preferred_register = (
-            "engineering" if understanding.coding_terms else pattern.register
-        )
+        if understanding.coding_terms and pattern.register not in {
+            "essay_formal",
+            "creative_narrative",
+            "current_affairs",
+        }:
+            preferred_register = "engineering"
+        else:
+            preferred_register = pattern.register
         if is_smalltalk:
             reply_body, lexical = self._compose_smalltalk_reply(understanding)
         else:
@@ -414,7 +427,8 @@ class Kernel:
                 preferred_register,
                 self._personality.describe(),
             )
-        reply_body = self._limit_paragraphs(reply_body, 2)
+        paragraph_limit = self._determine_paragraph_limit(pattern, understanding)
+        reply_body = self._limit_paragraphs(reply_body, paragraph_limit)
         if is_smalltalk:
             tone_header = "Hi there! I'm glad you reached out."
         else:
@@ -636,15 +650,52 @@ class Kernel:
         greeting_prefixes = ("hello", "hi", "hey", "greetings", "good morning", "good evening", "good afternoon")
         if any(lowered.startswith(prefix) for prefix in greeting_prefixes):
             intent = "conversation"
+        essay_request = any(
+            phrase in lowered
+            for phrase in (
+                "write an essay",
+                "write a multi-paragraph essay",
+                "multi paragraph essay",
+                "compose an essay",
+                "thesis statement",
+            )
+        ) or "essay" in understanding.focus_terms
+        creative_request = any(
+            phrase in lowered
+            for phrase in (
+                "creative writing",
+                "write a story",
+                "craft a narrative",
+                "imaginative scene",
+            )
+        )
+        world_request = any(
+            phrase in lowered
+            for phrase in (
+                "world today",
+                "current events",
+                "news update",
+                "what is happening",
+            )
+        )
+        if essay_request:
+            intent = "essay"
+        elif creative_request:
+            intent = "creative"
+        elif world_request:
+            intent = "current_events"
         if understanding.question:
-            intent = "question"
-        elif any(keyword in lowered for keyword in ("plan", "design", "build", "fix")):
-            intent = "problem_solving"
-        elif any(keyword in lowered for keyword in ("motivate", "inspire", "story")):
-            intent = "motivate"
-        elif understanding.command_clauses:
-            intent = "problem_solving"
-        if understanding.coding_terms:
+            if intent not in {"essay", "creative", "current_events"}:
+                intent = "question"
+        elif intent not in {"essay", "creative", "current_events"}:
+            if any(keyword in lowered for keyword in ("plan", "design", "build", "fix")):
+                intent = "problem_solving"
+            elif any(keyword in lowered for keyword in ("motivate", "inspire", "story")):
+                if not creative_request:
+                    intent = "motivate"
+            elif understanding.command_clauses:
+                intent = "problem_solving"
+        if understanding.coding_terms and intent not in {"essay", "creative", "current_events"}:
             intent = "problem_solving"
         affect = understanding.affect or self._compute_user_affect(lowered)
         if understanding.urgency and affect == "neutral":
@@ -805,8 +856,25 @@ class Kernel:
         if len(paragraphs) <= limit:
             return "\n\n".join(paragraphs)
         preserved = paragraphs[: limit - 1]
-        preserved.append(" ".join(paragraphs[limit - 1 :]))
+        remainder = "\n\n".join(paragraphs[limit - 1 :])
+        preserved.append(remainder)
         return "\n\n".join(preserved)
+
+    def _determine_paragraph_limit(
+        self, pattern: ConversationPattern, understanding: MessageUnderstanding
+    ) -> int:
+        structure = pattern.structure
+        if "thesis" in structure:
+            return 6
+        if "hook" in structure and "resolution" in structure:
+            return 5
+        if "situation" in structure:
+            return 4
+        if {"script", "roblox"}.issubset(set(understanding.focus_terms)):
+            return 4
+        if understanding.question and len(understanding.sentences) > 2:
+            return 3
+        return 2
 
     def _derive_topic(
         self,
@@ -932,14 +1000,23 @@ class Kernel:
         evidence_lines: List[str] = []
         for entry in list(memories)[:4]:
             snippet = entry.content
-            if len(snippet) > 120:
-                snippet = snippet[:117] + "..."
+            if "```" not in snippet and len(snippet) > 160:
+                snippet = snippet[:157] + "..."
             evidence_lines.append(
                 f"{entry.topic} → {snippet} (confidence {entry.confidence:.2f})"
             )
         if orchestration and orchestration.citations:
             for citation in orchestration.citations[:5]:
                 evidence_lines.append(f"Citation: {citation}")
+        if understanding.coding_terms and not any("```" in line for line in evidence_lines):
+            code_query_terms = understanding.focus_terms[:6] + ["roblox", "blueprint", "code"]
+            code_query = " ".join(term for term in code_query_terms if term)
+            for candidate in self._memory.search(code_query, limit=6):
+                if "```" in candidate.content:
+                    evidence_lines.append(
+                        f"{candidate.topic} → {candidate.content} (confidence {candidate.confidence:.2f})"
+                    )
+                    break
         if not evidence_lines and understanding.focus_terms:
             evidence_lines.append(
                 "Focus alignment: "
