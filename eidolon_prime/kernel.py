@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass
 from typing import Dict, Any, Iterable, Optional, List
 
@@ -30,10 +31,15 @@ class ChatResult:
     analysis: CortexResult
 
     def render(self) -> str:
-        lines = ["Eidolon Prime:"]
-        lines.append(self.reply)
-        lines.append("\nAnalysis trace:")
-        lines.append(self.analysis.render())
+        lines = [
+            "Eidolon Prime — Conversation Output",
+            "===============================",
+            "🗣️ Reply:",
+            self.reply,
+            "",
+            "🧠 Reasoning Trail:",
+            self.analysis.render(),
+        ]
         return "\n".join(lines)
 
 
@@ -99,6 +105,7 @@ class Kernel:
         self._continuous_training_thread: Optional[threading.Thread] = None
         self._continuous_training_stop: Optional[threading.Event] = None
         self._continuous_training_focus: Optional[str] = None
+        self._background_warmup_thread: Optional[threading.Thread] = None
 
     def process_request(self, prompt: str) -> CortexResult:
         return self._cortex.process(prompt)
@@ -108,6 +115,7 @@ class Kernel:
             "compute_budget": self._config.resources.compute_budget,
             "max_parallel_agents": self._config.resources.max_parallel_agents,
             "experiment_limit": self._config.resources.experiment_limit,
+            "response_delay": self._config.resources.response_delay,
         }
         return KernelStatus(resources, self._personality.describe(), self._memory.summarize())
 
@@ -154,6 +162,9 @@ class Kernel:
         )
         tone_header = self._describe_tone(pattern.tone)
         reply = f"{tone_header}\n\n{reply_body}"
+        response_delay = max(0.0, min(2.0, self._config.resources.response_delay))
+        if response_delay:
+            time.sleep(response_delay)
         success_score = self._estimate_success(analysis, lexical, len(frame.evidence))
         self._conversation.register_turn(
             pattern.pattern_id,
@@ -171,6 +182,12 @@ class Kernel:
             self._personality.adjust(empathy=0.005)
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.68, "collaboration")
+        self._memory.record(
+            "conversation::output_area",
+            f"Reply displayed in output area for '{message}'",
+            0.7,
+            "collaboration",
+        )
         if refresh_report:
             self._memory.record(
                 "conversation::refresh",
@@ -312,6 +329,9 @@ class Kernel:
     def _infer_intent_and_affect(self, message: str) -> tuple[str, str]:
         lowered = message.lower().strip()
         intent = "explain"
+        greeting_prefixes = ("hello", "hi", "hey", "greetings", "good morning", "good evening", "good afternoon")
+        if any(lowered.startswith(prefix) for prefix in greeting_prefixes):
+            intent = "conversation"
         if "?" in message or any(
             lowered.startswith(prefix)
             for prefix in ("how", "what", "why", "where", "when")
@@ -509,6 +529,8 @@ class Kernel:
                     "system",
                 )
             self._autonomous_bootstrap_complete = True
+        if self._background_warmup_thread is None:
+            self._start_background_warmup()
         settings = self._config.web
         if not settings.autostart:
             self._autonomy_initialized = True
@@ -522,6 +544,24 @@ class Kernel:
         if imported:
             self._personality.adjust(curiosity=0.05, confidence=0.02)
         self._autonomy_initialized = True
+
+    def _start_background_warmup(self) -> None:
+        """Launch a short warmup loop that keeps the academy active."""
+
+        def worker() -> None:
+            for focus in ("warmup vocabulary", "warmup reasoning", "warmup dialogue"):
+                report = self.autonomous_train(focus, batch_size=12)
+                self._memory.record(
+                    "autonomy::warmup",
+                    f"Warmup batch for {focus}: {report.render()}",
+                    0.64,
+                    "autonomous_web",
+                )
+                time.sleep(0.2)
+
+        thread = threading.Thread(target=worker, name="eidolon-warmup", daemon=True)
+        thread.start()
+        self._background_warmup_thread = thread
 
     def _describe_tone(self, preferred: Optional[str] = None) -> str:
         if preferred == "encouraging" and self._personality.empathy > 0.5:

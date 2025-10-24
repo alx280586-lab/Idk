@@ -252,6 +252,7 @@ def _build_phases() -> Tuple[Tuple[PracticePhase, ...], Dict[str, str]]:
     phases.append(_build_phrase_phase())
     phases.append(_build_sentence_phase())
     phases.append(_build_dialogue_phase())
+    phases.append(_build_peer_phase())
     return tuple(phases), lexicon
 
 
@@ -436,6 +437,50 @@ def _build_dialogue_phase() -> PracticePhase:
         name="dialogue",
         description=description,
         threshold=0.82,
+        scenarios=tuple(scenarios),
+    )
+
+
+def _build_peer_phase() -> PracticePhase:
+    peers = _AI_PARTNERS
+    challenges = _PEER_CHALLENGES
+    focuses = _PEER_FOCUSES
+    scenarios: List[DialogueScenario] = []
+    for peer in peers:
+        for challenge in challenges:
+            for focus in focuses:
+                keywords = (
+                    peer.split()[0],
+                    challenge.split()[0],
+                    focus.split()[0],
+                    "reflection",
+                )
+                name = (
+                    f"peer::{peer.replace(' ', '-')}::{challenge.replace(' ', '-')}::{focus.replace(' ', '-')}"
+                )
+                prompt = (
+                    f"Practice a peer-to-peer session where {peer} role-plays {challenge}."
+                    f" Coordinate a loop that keeps both assistants learning about {focus}."
+                )
+                response_goal = (
+                    f"Guide {peer} through {challenge} by reflecting on insights about {focus} and agreeing on next drills."
+                )
+                scenarios.append(
+                    DialogueScenario(
+                        name=name,
+                        prompt=prompt,
+                        response_goal=response_goal,
+                        keywords=keywords,
+                        tone="steady",
+                        intent="conversation",
+                        structure_hint="greet→explore→respond→reflect",
+                    )
+                )
+    description = "Hold reflective loops with other AI assistants until speech patterns feel natural."
+    return PracticePhase(
+        name="peer_dialogue",
+        description=description,
+        threshold=0.86,
         scenarios=tuple(scenarios),
     )
 
@@ -644,4 +689,26 @@ _DIALOGUE_TOPICS: Tuple[str, ...] = (
     "content localization pipelines",
     "mentoring junior scripters",
     "federated knowledge sharing",
+)
+
+_PEER_CHALLENGES: Tuple[str, ...] = (
+    "critiquing reasoning chains",
+    "testing conversational rhythm",
+    "auditing evidence selection",
+    "role-playing user frustration",
+    "mapping empathy adjustments",
+    "challenging economy balance",
+    "stress-testing grammar outputs",
+    "coordinating cross-agent planning",
+)
+
+_PEER_FOCUSES: Tuple[str, ...] = (
+    "economy fairness",
+    "tone alignment",
+    "reasoning clarity",
+    "player empathy",
+    "evidence tracking",
+    "response pacing",
+    "vocabulary depth",
+    "web context linking",
 )

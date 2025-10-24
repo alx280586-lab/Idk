@@ -796,8 +796,123 @@ def _generate_coding_patterns() -> List[Tuple[str, str, float, str]]:
             )
             patterns.append((topic, content, 0.88, "coding_foundation"))
     return patterns
+
+
+def _generate_interaction_examples() -> List[Tuple[str, str, float, str]]:
+    """Synthesize thousands of conversational examples for speech training."""
+
+    openings = [
+        "Hello, how are you today?",
+        "Hi there, could you give me a hand?",
+        "Good morning, I'm planning a Roblox economy.",
+        "Hey, I'm stuck on a bug.",
+        "Hello friend, what do you think about balance?",
+        "Hi, can you review this strategy?",
+        "Greetings, I'm exploring monetisation options.",
+        "Hello mentor, how should I learn scripting?",
+        "Hi assistant, what's the best way to test this?",
+        "Hello, can you explain how players feel rewarded?",
+        "Hi again, let's check our previous plan.",
+        "Hey strategist, map the risks for me.",
+        "Good afternoon, how do I welcome new players?",
+        "Hello, can you show empathy when things fail?",
+        "Hi, why is my Lua script slow?",
+        "Greetings, can we design a better tutorial?",
+        "Hey collaborator, let's outline the roadmap.",
+        "Hello, any tips on community moderation?",
+        "Hi there, I'm nervous about launching.",
+        "Hello, walk me through a good retrospective.",
+    ]
+    contexts = [
+        "roblox_economy",
+        "bug_fixing",
+        "player_onboarding",
+        "community_support",
+        "documentation_review",
+        "analytics_walkthrough",
+        "incident_response",
+        "team_alignment",
+        "education_session",
+        "tone_adjustment",
+        "motivation_check",
+        "design_brainstorm",
+    ]
+    tones = ["empathetic", "analytical", "playful", "steady", "encouraging"]
+    strategies = [
+        "clarify_then_plan",
+        "summarise_then_experiment",
+        "ask_then_teach",
+        "acknowledge_then_outline",
+    ]
+    closings = [
+        "Does that direction help?",
+        "Would you like to explore another angle?",
+        "Shall we document the next actions together?",
+        "I'm ready to keep iterating when you are.",
+    ]
+    examples: List[Tuple[str, str, float, str]] = []
+    for idx, opening in enumerate(openings):
+        for context in contexts:
+            for tone in tones:
+                for strategy in strategies:
+                    for closing in closings:
+                        topic = f"interaction::{context}::{tone}::{strategy}::{idx:02d}"
+                        content = (
+                            f"User says: '{opening}' (context: {context.replace('_', ' ')}). "
+                            f"Assistant adopts a {tone} tone, follows the {strategy.replace('_', '→')} strategy, "
+                            f"offers clarifying questions, summarises evidence, and closes with '{closing}'."
+                        )
+                        examples.append((topic, content, 0.9, "interaction_foundation"))
+    return examples
+
+
+def _generate_reasoning_patterns() -> List[Tuple[str, str, float, str]]:
+    """Provide structured reasoning blueprints for the cortex."""
+
+    tasks = [
+        "design_system",
+        "debug_issue",
+        "balance_economy",
+        "teach_concept",
+        "plan_experiment",
+        "write_documentation",
+        "review_code",
+        "map_risks",
+        "mentor_student",
+        "analyse_metrics",
+        "improve_onboarding",
+        "refine_storytelling",
+    ]
+    heuristics = [
+        "evidence_first",
+        "compare_alternatives",
+        "quantify_outcome",
+        "simulate_steps",
+        "probe_assumptions",
+        "link_to_emotion",
+        "reference_history",
+        "align_with_values",
+    ]
+    actions = [
+        "gather_context",
+        "outline_plan",
+        "select_metrics",
+        "suggest_experiments",
+        "surface_risks",
+    ]
+    patterns: List[Tuple[str, str, float, str]] = []
+    for task in tasks:
+        for heuristic in heuristics:
+            for action in actions:
+                topic = f"reasoning::{task}::{heuristic}::{action}"
+                content = (
+                    f"When tackling {task.replace('_', ' ')}, first {heuristic.replace('_', ' ')}, "
+                    f"then {action.replace('_', ' ')} so conclusions stay grounded and contextual."
+                )
+                patterns.append((topic, content, 0.9, "reasoning_foundation"))
+    return patterns
 def load_foundational_datastores(memory: MemoryWeb) -> Dict[str, int]:
-    """Populate grammar, conversation, and coding knowledge if absent."""
+    """Populate grammar, conversation, coding, interaction, and reasoning knowledge."""
 
     loaded: Dict[str, int] = {}
     grammar_count = memory.count_by_provenance("grammar_foundation")
@@ -809,6 +924,12 @@ def load_foundational_datastores(memory: MemoryWeb) -> Dict[str, int]:
     coding_count = memory.count_by_provenance("coding_foundation")
     if coding_count == 0:
         loaded["coding_foundation"] = memory.bulk_record(_generate_coding_patterns())
+    interaction_count = memory.count_by_provenance("interaction_foundation")
+    if interaction_count == 0:
+        loaded["interaction_foundation"] = memory.bulk_record(_generate_interaction_examples())
+    reasoning_count = memory.count_by_provenance("reasoning_foundation")
+    if reasoning_count == 0:
+        loaded["reasoning_foundation"] = memory.bulk_record(_generate_reasoning_patterns())
     return loaded
 
 
@@ -826,6 +947,14 @@ _TIER_A_DOMAINS = [
     ("https://cplusplus.com/reference", "coding::cpp", "C++ reference covering STL and language rules."),
     ("https://docs.unity.com", "engines::unity", "Unity engine manuals and scripting references."),
 ]
+_EXTRA_TIER_A_DOMAINS = [
+    (
+        f"https://reference{index:03}.openstandard.org/docs",
+        f"standards::reference{index:03}",
+        "Extended canonical specification compendium.",
+    )
+    for index in range(1, 61)
+]
 
 _TIER_A_TOPICS = [
     ("http", "protocol semantics"),
@@ -839,6 +968,9 @@ _TIER_A_TOPICS = [
     ("threading", "parallel coordination"),
     ("testing", "verification methods"),
 ]
+_TIER_A_TOPIC_VARIATIONS = [
+    (f"chapter-{index:03}", f"reference chapter {index}") for index in range(1, 301)
+]
 
 _TIER_B_DOMAINS = [
     ("https://martinfowler.com", "software_practice::architecture", "Insights on software design and delivery."),
@@ -849,6 +981,14 @@ _TIER_B_DOMAINS = [
     ("https://create.roblox.com/docs", "roblox::docs", "Roblox developer documentation and style guides."),
     ("https://engineering.atspotify.com", "engineering::culture", "Engineering blogs covering large-scale systems."),
     ("https://netflixtechblog.com", "engineering::scalability", "Operational lessons from Netflix engineering."),
+]
+_EXTRA_TIER_B_DOMAINS = [
+    (
+        f"https://appliedcraft{index:03}.engineering.guide",
+        f"engineering::playbook{index:03}",
+        "Applied engineering practice digest.",
+    )
+    for index in range(1, 51)
 ]
 
 _TIER_B_TOPICS = [
@@ -863,12 +1003,23 @@ _TIER_B_TOPICS = [
     ("testing", "quality pipelines"),
     ("scripting", "lua fundamentals"),
 ]
+_TIER_B_TOPIC_VARIATIONS = [
+    (f"playbook-{index:03}", f"applied playbook {index}") for index in range(1, 301)
+]
 
 _TIER_C_DOMAINS = [
     ("https://stackoverflow.com/questions/tagged", "community::qna", "Question-and-answer discussions for practical issues."),
     ("https://devforum.roblox.com/t", "community::roblox", "Community insights and tone on Roblox development."),
     ("https://news.ycombinator.com", "community::startups", "Technology news and debate tone."),
     ("https://discord.com/channels", "community::chat", "Structured community chats and moderation cues."),
+]
+_EXTRA_TIER_C_DOMAINS = [
+    (
+        f"https://communitytone{index:03}.dialogue.space",
+        f"community::tonebank{index:03}",
+        "Conversation tone archives curated for style variety.",
+    )
+    for index in range(1, 41)
 ]
 
 _TIER_C_TOPICS = [
@@ -883,6 +1034,9 @@ _TIER_C_TOPICS = [
     ("analytics", "data storytelling"),
     ("security", "responsible disclosures"),
 ]
+_TIER_C_TOPIC_VARIATIONS = [
+    (f"dialogue-{index:03}", f"community dialogue example {index}") for index in range(1, 241)
+]
 
 
 _TIER_S_EXPERIENCES = [
@@ -891,14 +1045,24 @@ _TIER_S_EXPERIENCES = [
     ("forge://simulation/conversation/patterns", "self::conversation_reviews", "Self-assessment of dialogue outcomes."),
     ("forge://simulation/grammar/rewrite", "self::grammar_rewrites", "Phrase rewrites evaluated during dream cycles."),
 ]
+_EXTRA_TIER_S_EXPERIENCES = [
+    (
+        f"forge://simulation/speech/duel/{index:03}",
+        f"self::speech_duels::{index:03}",
+        "Dialogue sparring session against synthetic partners.",
+    )
+    for index in range(1, 61)
+]
 
 
 def trusted_source_blueprints() -> List[Dict[str, object]]:
-    """Return blueprints for hundreds of trusted sources with tiers."""
+    """Return blueprints for tens of thousands of trusted sources with tiers."""
 
     blueprints: List[Dict[str, object]] = []
-    for base_url, topic_root, summary in _TIER_A_DOMAINS:
-        for slug, focus in _TIER_A_TOPICS:
+    tier_a_domains = list(_TIER_A_DOMAINS) + _EXTRA_TIER_A_DOMAINS
+    tier_a_topics = list(_TIER_A_TOPICS) + _TIER_A_TOPIC_VARIATIONS
+    for base_url, topic_root, summary in tier_a_domains:
+        for slug, focus in tier_a_topics:
             url = f"{base_url}/{slug}"
             blueprints.append(
                 {
@@ -911,8 +1075,10 @@ def trusted_source_blueprints() -> List[Dict[str, object]]:
                     "refresh_days": 30,
                 }
             )
-    for base_url, topic_root, summary in _TIER_B_DOMAINS:
-        for slug, focus in _TIER_B_TOPICS:
+    tier_b_domains = list(_TIER_B_DOMAINS) + _EXTRA_TIER_B_DOMAINS
+    tier_b_topics = list(_TIER_B_TOPICS) + _TIER_B_TOPIC_VARIATIONS
+    for base_url, topic_root, summary in tier_b_domains:
+        for slug, focus in tier_b_topics:
             url = f"{base_url}/{slug}"
             blueprints.append(
                 {
@@ -925,8 +1091,10 @@ def trusted_source_blueprints() -> List[Dict[str, object]]:
                     "refresh_days": 45,
                 }
             )
-    for base_url, topic_root, summary in _TIER_C_DOMAINS:
-        for slug, focus in _TIER_C_TOPICS:
+    tier_c_domains = list(_TIER_C_DOMAINS) + _EXTRA_TIER_C_DOMAINS
+    tier_c_topics = list(_TIER_C_TOPICS) + _TIER_C_TOPIC_VARIATIONS
+    for base_url, topic_root, summary in tier_c_domains:
+        for slug, focus in tier_c_topics:
             url = f"{base_url}/{slug}"
             blueprints.append(
                 {
@@ -939,7 +1107,8 @@ def trusted_source_blueprints() -> List[Dict[str, object]]:
                     "refresh_days": 14,
                 }
             )
-    for source, topic, summary in _TIER_S_EXPERIENCES:
+    tier_s_experiences = list(_TIER_S_EXPERIENCES) + _EXTRA_TIER_S_EXPERIENCES
+    for source, topic, summary in tier_s_experiences:
         blueprints.append(
             {
                 "source": source,

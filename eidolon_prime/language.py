@@ -122,6 +122,31 @@ _DEFAULT_TEMPLATES: Tuple[GrammarTemplate, ...] = (
         register_tags=("balanced",),
         variation_ops=("cause_effect",),
     ),
+    GrammarTemplate(
+        template_id="analysis_compare_decide",
+        rhetorical_function="analysis",
+        slots={
+            "introduction": "{opener} {topic_sentence} {tone_clause}",
+            "analysis": "{connector} {analysis_sentence}",
+            "comparison": "{connector} {comparison_sentence}",
+            "decision": "{connector} {decision_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("analytical", "technical_conversational"),
+        variation_ops=("cause_effect", "highlight_decision"),
+    ),
+    GrammarTemplate(
+        template_id="dialogue_loop",
+        rhetorical_function="conversation",
+        slots={
+            "introduction": "{opener} {clarify_sentence}",
+            "analysis": "{connector} {analysis_sentence}",
+            "reflection": "{connector} {reflection_sentence}",
+            "closing": "{closing_sentence}",
+        },
+        register_tags=("dialogue_support", "balanced"),
+        variation_ops=("invite_followup", "shuffle_support"),
+    ),
 )
 
 
@@ -171,6 +196,25 @@ _DEFAULT_REGISTERS: Tuple[RegisterPack, ...] = (
         ),
         hedges=("carefully", "thoughtfully"),
     ),
+    RegisterPack(
+        name="dialogue_support",
+        openers=(
+            "Thanks for opening up about this.",
+            "Let's sync our understanding first.",
+            "I appreciate you sharing the context.",
+        ),
+        connectors=(
+            "As we unpack this,",
+            "Here's what I'm hearing,",
+            "To keep the dialogue flowing,",
+        ),
+        closings=(
+            "I'm here for more conversation as you think it through.",
+            "Feel free to bounce more thoughts back at me.",
+            "Let's keep the exchange going whenever you're ready.",
+        ),
+        hedges=("gently", "openly", "collaboratively"),
+    ),
 )
 
 
@@ -195,6 +239,10 @@ class GrammarDatastore:
             "acknowledge→analysis→summary": "acknowledge_analyse",
             "acknowledge→contrast→resolve": "acknowledge_analyse",
             "teach→drill→recap": "explain_sequence",
+            "analyze→compare→decide": "analysis_compare_decide",
+            "analyse→compare→decide": "analysis_compare_decide",
+            "greet→explore→respond→reflect": "dialogue_loop",
+            "greet→clarify→respond→reflect": "dialogue_loop",
         }
         template_id = lookup.get(structure, "acknowledge_analyse")
         return self._templates[template_id]
@@ -242,6 +290,10 @@ class GrammarDatastore:
         answer_sentence = self._compose_answer_sentence(frame)
         story_hook = self._compose_story_hook(frame)
         lesson_sentence = self._compose_lesson_sentence(frame)
+        ack_sentence = self._compose_ack_sentence(frame, hedge)
+        comparison_sentence = self._compose_comparison_sentence(frame)
+        decision_sentence = self._compose_decision_sentence(frame)
+        reflection_sentence = self._compose_reflection_sentence(frame)
         closing_sentence = self._compose_closing_sentence(frame, closing)
         tone_clause = f"I'm keeping the tone {frame.emotional_tone}."
         return {
@@ -259,6 +311,10 @@ class GrammarDatastore:
             "answer_sentence": answer_sentence,
             "story_hook": story_hook,
             "lesson_sentence": lesson_sentence,
+            "ack_sentence": ack_sentence,
+            "comparison_sentence": comparison_sentence,
+            "decision_sentence": decision_sentence,
+            "reflection_sentence": reflection_sentence,
         }
 
     def _compose_analysis_sentence(self, frame: SemanticFrame, hedge: str) -> str:
@@ -313,6 +369,28 @@ class GrammarDatastore:
         if frame.actions:
             return f"Their breakthrough came from {self._tidy(frame.actions[0])}."
         return "Progress arrived once they kept iterating on small experiments."
+
+    def _compose_ack_sentence(self, frame: SemanticFrame, hedge: str) -> str:
+        topic = frame.condensed_topic()
+        return f"{hedge.title()} I want to acknowledge how important {topic} is to you before we dive deeper."
+
+    def _compose_comparison_sentence(self, frame: SemanticFrame) -> str:
+        if len(frame.evidence) > 1:
+            primary = self._tidy(frame.evidence[0])
+            secondary = self._tidy(frame.evidence[1])
+            return f"Comparing signals shows {primary} outweighs {secondary}."
+        return "I'm ready to compare alternatives once more evidence arrives."
+
+    def _compose_decision_sentence(self, frame: SemanticFrame) -> str:
+        if frame.actions:
+            action = self._tidy(frame.actions[0])
+            anchor = frame.outcome or frame.condensed_topic()
+            return f"Given that, choosing to {action} keeps momentum pointed at {anchor}."
+        return "I'll hold off on a recommendation until we map the viable paths."
+
+    def _compose_reflection_sentence(self, frame: SemanticFrame) -> str:
+        anchor = frame.outcome or frame.condensed_topic()
+        return f"I'm reflecting on how this supports {anchor} so our dialogue stays meaningful."
 
     def _compose_closing_sentence(
         self, frame: SemanticFrame, closing: str
@@ -412,6 +490,13 @@ class LanguageEngine:
             "analysis": "analysis",
             "summary": "closing",
             "lesson": "analysis",
+            "compare": "comparison",
+            "decide": "decision",
+            "decision": "decision",
+            "reflect": "reflection",
+            "explore": "analysis",
+            "respond": "analysis",
+            "greet": "introduction",
         }
         return mapping.get(segment, "analysis")
 

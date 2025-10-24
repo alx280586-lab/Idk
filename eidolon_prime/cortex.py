@@ -110,10 +110,25 @@ class ReasoningAgent(Agent):
             steps.append(
                 f"No stored lesson matched directly, so I'm lining up autonomous web search and practice drills around {preview}."
             )
+        reasoning_tracks = [entry for entry in related if entry.topic.startswith("reasoning::")]
+        if reasoning_tracks:
+            focus = reasoning_tracks[0].topic.split("::")[1:4]
+            steps.append(
+                "Following reasoning blueprint "
+                + " → ".join(part.replace("_", " ") for part in focus)
+                + " to keep thoughts organised."
+            )
+        interaction_examples = [entry for entry in related if entry.topic.startswith("interaction::")]
+        if interaction_examples:
+            steps.append("Referencing interaction transcripts so tone and pacing mirror successful dialogues.")
         if any(entry.provenance == "speech_practice" for entry in related):
             steps.append("Recent speech rehearsals give me phrasing patterns that keep the reply natural.")
         if personality.curiosity < 0.4:
             steps.append("I'll raise curiosity slightly so we test assumptions instead of echoing keywords.")
+        if not reasoning_tracks:
+            steps.append(
+                "I'll synthesise a mini plan: clarify intent, surface relevant knowledge, weigh trade-offs, and confirm next steps."
+            )
         narrative = " ".join(steps)
         conclusion = "That plan shapes a grounded response that stays relevant to what you asked."
         return [AgentResponse(self.name, f"{narrative} {conclusion}")]
@@ -174,6 +189,15 @@ class Cortex:
     def process(self, prompt: str) -> "CortexResult":
         responses: List[AgentResponse] = []
         related = self._memory.search(prompt, limit=7)
+        if len(related) < 3:
+            report = self._web_growth.autonomous_training(prompt, batch_size=10)
+            self._memory.record(
+                "cortex::auto_refresh",
+                report.render(),
+                0.66,
+                "autonomous_web",
+            )
+            related = self._memory.search(prompt, limit=9)
         for agent in self._agents:
             responses.extend(agent.generate(prompt, self._personality, self._memory, related))
         insights = [response.insight for response in responses]

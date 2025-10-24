@@ -2,7 +2,8 @@
   "resources": {
     "compute_budget": 0.5,
     "max_parallel_agents": 3,
-    "experiment_limit": 5
+    "experiment_limit": 5,
+    "response_delay": 0.35
   },
   "personality": {
     "curiosity": 0.5,
@@ -29,16 +30,14 @@
       "reboot",
       "sudo ",
       "curl ",
-      "wget ",
-      "http://",
-      "https://"
+      "wget "
     ],
     "max_payload_length": 800
   },
   "web": {
     "autostart": true,
-    "cycle_batch_size": 25,
-    "cycle_interval": 1.5,
+    "cycle_batch_size": 50,
+    "cycle_interval": 1.0,
     "seeds": [
       {
         "url": "https://example.com/eidolon/primer",

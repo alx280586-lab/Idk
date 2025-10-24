@@ -17,6 +17,7 @@ class ResourceLimits:
     compute_budget: float = 0.5
     max_parallel_agents: int = 3
     experiment_limit: int = 5
+    response_delay: float = 0.35
 
 
 @dataclass
@@ -55,8 +56,6 @@ class SecuritySettings:
             "sudo ",
             "curl ",
             "wget ",
-            "http://",
-            "https://",
         ]
     )
     max_payload_length: int = 800
@@ -76,8 +75,8 @@ class WebSettings:
     """Controls how the web growth system bootstraps knowledge."""
 
     autostart: bool = True
-    cycle_batch_size: int = 25
-    cycle_interval: float = 1.5
+    cycle_batch_size: int = 50
+    cycle_interval: float = 1.0
     seeds: List[WebSeed] = field(
         default_factory=lambda: [
             WebSeed(

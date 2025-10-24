@@ -92,6 +92,14 @@ _DEFAULT_PATTERNS: Tuple[ConversationPattern, ...] = (
         register="balanced",
         success_score_by_context={"global": 0.6},
     ),
+    ConversationPattern(
+        pattern_id="dialogue.loop.reflect",
+        intent="conversation",
+        tone="warm",
+        structure="greet→explore→respond→reflect",
+        register="dialogue_support",
+        success_score_by_context={"global": 0.62},
+    ),
 )
 
 

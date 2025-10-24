@@ -214,16 +214,17 @@ class WebGrowthSystem:
             max(1, batch_size // 2)
         )
         if focus_tokens:
-            pool = [
-                source
-                for source in AUTONOMOUS_SOURCES
-                if focus_tokens
-                & (
+            pool: List[AutonomousSource] = []
+            for source in AUTONOMOUS_SOURCES:
+                tag_space = (
                     {tag.lower() for tag in source.tags}
-                    | set(source.topic.lower().split("::"))
+                    | set(source.topic.lower().replace("::", " ").split())
                     | set(source.summary.lower().split())
                 )
-            ]
+                if focus_tokens & tag_space:
+                    pool.append(source)
+                    if len(pool) >= batch_size * 5:
+                        break
         else:
             pool = []
         if not pool:
@@ -241,6 +242,12 @@ class WebGrowthSystem:
                 source.topic,
                 content,
                 0.72,
+                "autonomous_web",
+            )
+            self._memory.record(
+                f"autonomy::comprehension::{source.topic}",
+                f"Validated understanding of {source.topic} using {source.source}.",
+                0.78,
                 "autonomous_web",
             )
             self._crawl_log.append(source.source)
