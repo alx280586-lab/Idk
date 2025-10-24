@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPC Forecaster Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>SPC Forecaster Simulation</h1>
+    <p>Analyze the atmosphere, issue forecasts, and see how the outbreak unfolds.</p>
+    <button id="newScenario">Generate New Scenario</button>
+  </header>
+
+  <main>
+    <section id="scenarioOverview" class="panel">
+      <h2>Synoptic Overview</h2>
+      <div id="overviewText"></div>
+      <div class="metrics-grid" id="environmentMetrics"></div>
+    </section>
+
+    <section id="soundingSection" class="panel">
+      <h2>Sounding &amp; Hodograph</h2>
+      <div class="sounding-container">
+        <canvas id="soundingCanvas" width="600" height="600" aria-label="Skew-T Log-P Diagram"></canvas>
+        <canvas id="hodographCanvas" width="300" height="300" aria-label="Hodograph"></canvas>
+      </div>
+      <button id="regenerateSounding">Regenerate Sounding</button>
+    </section>
+
+    <section id="forecastSection" class="panel">
+      <h2>Issue Convective Outlook</h2>
+      <form id="outlookForm">
+        <div class="risk-controls">
+          <label>Overall Category
+            <select name="overallCategory" required>
+              <option value="MRGL">Marginal</option>
+              <option value="SLGT" selected>Slight</option>
+              <option value="ENH">Enhanced</option>
+              <option value="MDT">Moderate</option>
+              <option value="HIGH">High</option>
+            </select>
+          </label>
+          <label>Wind Risk
+            <select name="windRisk" required>
+              <option value="5">5%</option>
+              <option value="15" selected>15%</option>
+              <option value="30">30%</option>
+              <option value="45">45%</option>
+              <option value="60">60%</option>
+            </select>
+          </label>
+          <label>Hail Risk
+            <select name="hailRisk" required>
+              <option value="5">5%</option>
+              <option value="15" selected>15%</option>
+              <option value="30">30%</option>
+              <option value="45">45%</option>
+              <option value="60">60%</option>
+            </select>
+          </label>
+          <label>Tornado Risk
+            <select name="tornadoRisk" required>
+              <option value="2">2%</option>
+              <option value="5" selected>5%</option>
+              <option value="10">10%</option>
+              <option value="15">15%</option>
+              <option value="30">30%</option>
+            </select>
+          </label>
+        </div>
+        <div class="checkboxes">
+          <label><input type="checkbox" name="windHatched" /> Wind Hatched</label>
+          <label><input type="checkbox" name="hailHatched" /> Hail Hatched</label>
+          <label><input type="checkbox" name="torHatched" /> Tornado Hatched</label>
+        </div>
+        <label class="discussion-label">SPC Discussion
+          <textarea name="discussion" rows="8" placeholder="Discuss the synoptic setup, mesoscale features, storm modes, and timing."></textarea>
+        </label>
+        <button type="submit">Issue Forecast</button>
+      </form>
+    </section>
+
+    <section id="simulationSection" class="panel hidden">
+      <h2>Event Simulation</h2>
+      <div id="simulationTimeline"></div>
+      <button id="generateRecap">Generate Post-Event Recap</button>
+    </section>
+
+    <section id="recapSection" class="panel hidden">
+      <h2>Post-Event Recap</h2>
+      <div id="recapNarrative"></div>
+      <table id="damageTable">
+        <thead>
+          <tr>
+            <th>Event Type</th>
+            <th>Fatalities</th>
+            <th>Injuries</th>
+            <th>Damage (USD)</th>
+            <th>Rating / Size</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="eventDeepDives"></div>
+    </section>
+
+    <section id="scoreSection" class="panel hidden">
+      <h2>Verification</h2>
+      <div id="scoreSummary"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built with ❤️ for weather enthusiasts. Each scenario is generated on the fly—no two shifts are the same.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

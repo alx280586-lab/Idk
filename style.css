@@ -1,0 +1,237 @@
+:root {
+  --bg: #0f141d;
+  --panel-bg: rgba(20, 28, 40, 0.95);
+  --accent: #ffb347;
+  --accent-strong: #f26d21;
+  --text: #e9f1ff;
+  --muted: #8ba0c1;
+  --grid-line: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: radial-gradient(circle at top, #1b2738, #0b1018 55%);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header,
+footer {
+  background: rgba(8, 11, 17, 0.85);
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  letter-spacing: 0.05em;
+}
+
+header p {
+  margin: 0.5rem 0 1rem;
+  color: var(--muted);
+}
+
+button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  border: none;
+  color: #111;
+  padding: 0.65rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(242, 109, 33, 0.45);
+}
+
+main {
+  flex: 1;
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.panel {
+  background: var(--panel-bg);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.metric {
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.metric span {
+  display: block;
+}
+
+.metric .label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+
+.sounding-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+#soundingCanvas,
+#hodographCanvas {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.risk-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+select,
+textarea {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.65rem;
+  color: var(--text);
+  padding: 0.6rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.checkboxes {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.checkboxes label {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.checkboxes input {
+  margin-right: 0.5rem;
+}
+
+#simulationTimeline {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.timeline-entry {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0.75rem;
+  border-left: 4px solid var(--accent-strong);
+}
+
+#recapNarrative {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+#recapNarrative p,
+#eventDeepDives p {
+  line-height: 1.6;
+  color: #f3f7ff;
+}
+
+#damageTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 2rem;
+}
+
+#damageTable th,
+#damageTable td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: left;
+}
+
+#damageTable thead {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#scoreSummary {
+  display: grid;
+  gap: 1rem;
+}
+
+.score-card {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border-left: 4px solid var(--accent);
+}
+
+@media (max-width: 768px) {
+  main {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  header,
+  footer {
+    text-align: center;
+  }
+}
