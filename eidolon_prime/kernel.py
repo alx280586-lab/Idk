@@ -25,6 +25,12 @@ from .synthetic import SyntheticThoughtEngine, SyntheticThoughtPlan
 from .orchestrator import OrchestratorResult
 from .reasoning import ReasoningProfile
 from .knowledge import KnowledgeGapMonitor
+from .neural import (
+    UltraNeuralNetwork,
+    NeuralActivation,
+    NarrowCollective,
+    CollectiveReport,
+)
 
 
 @dataclass
@@ -33,21 +39,43 @@ class ChatResult:
 
     prompt: str
     reply: str
+    speech: str
     analysis: CortexResult
     plan: Optional[SyntheticThoughtPlan] = None
+    activation: Optional[NeuralActivation] = None
+    collective: Optional[CollectiveReport] = None
 
     def render(self) -> str:
         lines = [
             "Eidolon Prime — Conversation Output",
             "===============================",
-            "🗣️ Reply:",
+            "💬 Final Reply:",
             self.reply,
+            "",
+            "🔊 Speech Output:",
+            self.speech,
             "",
             "🧠 Reasoning Trail:",
             self.analysis.render(),
         ]
         if self.plan:
             lines.extend(["", "🧩 Synthetic Thought Plan:", self.plan.render()])
+        if self.activation:
+            lines.extend(
+                [
+                    "",
+                    "🕸️ Neural Activation:",
+                    self.activation.summary,
+                ]
+            )
+        if self.collective:
+            lines.extend(
+                [
+                    "",
+                    "🤝 Specialist Collective:",
+                    self.collective.consensus,
+                ]
+            )
         return "\n".join(lines)
 
 
@@ -98,6 +126,8 @@ class Kernel:
         synthetic: SyntheticThoughtEngine,
         reasoning: ReasoningProfile,
         knowledge: KnowledgeGapMonitor,
+        neural: UltraNeuralNetwork,
+        collective: NarrowCollective,
     ) -> None:
         self._config = config
         self._cortex = cortex
@@ -115,6 +145,8 @@ class Kernel:
         self._synthetic = synthetic
         self._reasoning = reasoning
         self._knowledge = knowledge
+        self._neural = neural
+        self._collective = collective
         self._autonomy_initialized = False
         self._seed_initialized = False
         self._autonomous_bootstrap_complete = False
@@ -184,6 +216,19 @@ class Kernel:
             plan=plan,
             gap_report=gap_report,
         )
+        if analysis.reasoning_summary is None:
+            analysis.reasoning_summary = ""
+        activation = self._neural.activate(
+            message,
+            understanding,
+            plan,
+            analysis.orchestration,
+        )
+        if activation.summary not in analysis.reasoning_summary:
+            if analysis.reasoning_summary:
+                analysis.reasoning_summary += "\n\n" + activation.summary
+            else:
+                analysis.reasoning_summary = activation.summary
         refresh_report: AutoTrainingReport | None = None
         if self._should_refresh_context(message, analysis, understanding):
             focus_query = understanding.focus_text() or message
@@ -200,6 +245,12 @@ class Kernel:
                 understanding=understanding,
                 plan=plan,
                 gap_report=gap_report,
+            )
+            activation = self._neural.activate(
+                message,
+                understanding,
+                plan,
+                analysis.orchestration,
             )
             analysis.reasoning_summary = (
                 analysis.reasoning_summary
@@ -221,6 +272,12 @@ class Kernel:
                 understanding=understanding,
                 plan=plan,
                 gap_report=gap_report,
+            )
+            activation = self._neural.activate(
+                message,
+                understanding,
+                plan,
+                analysis.orchestration,
             )
         if gap_report.resolved_terms():
             reinforcement = ", ".join(gap_report.resolved_terms()[:4])
@@ -259,6 +316,23 @@ class Kernel:
             )
             for index, highlight in enumerate(understanding.highlights(), start=1)
         )
+        collective = self._collective.consensus(
+            message,
+            activation,
+            understanding,
+            plan,
+        )
+        if collective:
+            addition = (
+                collective.consensus
+                + " Specialist confidence "
+                + f"{collective.confidence:.2f}."
+            )
+            if addition not in analysis.reasoning_summary:
+                if analysis.reasoning_summary:
+                    analysis.reasoning_summary += "\n\n" + addition
+                else:
+                    analysis.reasoning_summary = addition
         frame = self._build_semantic_frame(
             message,
             intent,
@@ -268,6 +342,8 @@ class Kernel:
             understanding,
             plan,
             analysis.orchestration,
+            activation,
+            collective,
         )
         preferred_register = (
             "engineering" if understanding.coding_terms else pattern.register
@@ -278,8 +354,10 @@ class Kernel:
             preferred_register,
             self._personality.describe(),
         )
+        reply_body = self._limit_paragraphs(reply_body, 2)
         tone_header = self._describe_tone(pattern.tone)
         reply = f"{tone_header}\n\n{reply_body}"
+        speech_output = self._speech.vocalize(reply_body)
         response_delay = max(0.0, min(2.0, self._config.resources.response_delay))
         if response_delay:
             time.sleep(response_delay)
@@ -302,6 +380,9 @@ class Kernel:
             self._personality.adjust(empathy=0.005)
         self._memory.record("conversation", f"user::{message}", 0.6, "collaboration")
         self._memory.record("conversation", f"eidolon::{reply}", 0.68, "collaboration")
+        self._memory.record(
+            "conversation::speech", speech_output, 0.67, "speech_output"
+        )
         self._memory.record(
             "conversation::understanding",
             understanding.summary(),
@@ -334,7 +415,15 @@ class Kernel:
             0.69,
             "synthetic_plan",
         )
-        return ChatResult(message, reply, analysis, plan)
+        return ChatResult(
+            message,
+            reply,
+            speech_output,
+            analysis,
+            plan,
+            activation,
+            collective,
+        )
 
     def autonomous_train(
         self, focus: str | None = None, *, batch_size: Optional[int] = None
@@ -518,6 +607,8 @@ class Kernel:
         understanding: MessageUnderstanding,
         plan: Optional[SyntheticThoughtPlan],
         orchestration: Optional[OrchestratorResult],
+        activation: NeuralActivation,
+        collective: Optional[CollectiveReport],
     ) -> SemanticFrame:
         topic = self._derive_topic(
             message, analysis.related_memories, understanding, plan
@@ -529,18 +620,36 @@ class Kernel:
             plan,
             orchestration,
         )
+        if activation.attention_terms:
+            key_points.extend(
+                f"Neural focus: {term}" for term in activation.attention_terms[:4]
+            )
+        if collective:
+            key_points.append(collective.consensus)
         evidence = self._extract_evidence(
             analysis.related_memories,
             understanding,
             plan,
             orchestration,
         )
+        if collective:
+            evidence.extend(
+                insight.contribution for insight in collective.insights[:3]
+            )
         actions = self._extract_actions(
             analysis,
             understanding,
             plan,
             orchestration,
         )
+        if collective and collective.adjustments:
+            adjustment_text = ", ".join(
+                f"{key.replace('_', ' ')}→{value:.2f}"
+                for key, value in collective.adjustments.items()
+            )
+            actions.append(
+                f"Collective adjustments applied: {adjustment_text}."
+            )
         emotional_tone = self._derive_emotional_tone(pattern.tone, affect, understanding)
         call_to_action = self._craft_call_to_action(analysis, actions, understanding)
         outcome = analysis.reflection.rationale
@@ -555,6 +664,16 @@ class Kernel:
             call_to_action=call_to_action,
             outcome=outcome,
         )
+
+    def _limit_paragraphs(self, reply_body: str, limit: int) -> str:
+        paragraphs = [segment.strip() for segment in reply_body.split("\n\n") if segment.strip()]
+        if limit <= 0:
+            return "".join(paragraphs)
+        if len(paragraphs) <= limit:
+            return "\n\n".join(paragraphs)
+        preserved = paragraphs[: limit - 1]
+        preserved.append(" ".join(paragraphs[limit - 1 :]))
+        return "\n\n".join(preserved)
 
     def _derive_topic(
         self,

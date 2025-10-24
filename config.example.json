@@ -55,10 +55,20 @@
     ]
   },
   "synthetic": {
-    "parameter_count": 3200000,
+    "parameter_count": 5200000,
     "parameter_groups": 16,
     "context_vault_size": 360,
     "max_harvest_queries": 4
+  },
+  "neural": {
+    "parameter_count": 2000000,
+    "layers": [
+      "lexical",
+      "concept",
+      "dialogue",
+      "evidence",
+      "expression"
+    ]
   },
   "orchestrator": {
     "trace_path": "trace.json"

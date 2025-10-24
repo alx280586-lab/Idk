@@ -162,6 +162,21 @@ class SpeechAcademy:
         )
         return report
 
+    def vocalize(self, reply: str) -> str:
+        """Produce a concise spoken rendering of the textual reply."""
+
+        sentences = [
+            segment.strip()
+            for segment in reply.replace("\n", " ").split(".")
+            if segment.strip()
+        ]
+        if not sentences:
+            return "(no speech output generated)"
+        preview = ". ".join(sentences[:2])
+        if not preview.endswith("."):
+            preview += "."
+        return preview
+
     def observe_message(self, message: str, memory: MemoryWeb) -> None:
         tokens = {token for token in _tokenize(message) if len(token) > 2}
         for token in tokens:

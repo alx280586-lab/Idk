@@ -30,6 +30,7 @@ from .style import StyleProfile
 from .evaluation import EvaluationHarness
 from .critics import CriticSuite
 from .orchestrator import ReasoningOrchestrator
+from .neural import UltraNeuralNetwork, NarrowCollective, NarrowSpecialist
 
 
 @dataclass
@@ -90,6 +91,30 @@ class EidolonPrimeApp:
             critics,
             default_trace_path=config.orchestrator.trace_path,
         )
+        neural = UltraNeuralNetwork(
+            parameter_count=config.neural.parameter_count,
+            layers=config.neural.layers,
+        )
+        collective = NarrowCollective(
+            specialists=[
+                NarrowSpecialist("lexicon", ("hello", "hi", "greeting", "meaning")),
+                NarrowSpecialist(
+                    "reality",
+                    ("human", "world", "experience", "time", "event"),
+                    bias=0.7,
+                ),
+                NarrowSpecialist(
+                    "coding",
+                    ("lua", "roblox", "script", "function", "economy"),
+                    bias=0.72,
+                ),
+                NarrowSpecialist(
+                    "grammar",
+                    ("sentence", "phrase", "syntax", "tone", "voice"),
+                    bias=0.68,
+                ),
+            ]
+        )
         cortex = Cortex(
             personality=personality,
             forge=forge,
@@ -117,6 +142,8 @@ class EidolonPrimeApp:
             synthetic=synthetic,
             reasoning=reasoning,
             knowledge=knowledge,
+            neural=neural,
+            collective=collective,
         )
         collaboration = CollaborationLayer(kernel)
         app = cls(config=config, kernel=kernel, collaboration=collaboration)

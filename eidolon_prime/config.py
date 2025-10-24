@@ -100,10 +100,22 @@ class WebSettings:
 class SyntheticSettings:
     """Controls the procedural+parametric hybrid thought engine."""
 
-    parameter_count: int = 3_200_000
+    parameter_count: int = 5_200_000
     parameter_groups: int = 16
     context_vault_size: int = 360
     max_harvest_queries: int = 4
+
+
+@dataclass
+class NeuralSettings:
+    """Configures the ultra neural mesh used for conversational fluency."""
+
+    parameter_count: int = 2_000_000
+    layers: List[str] = field(
+        default_factory=lambda: [
+            "lexical", "concept", "dialogue", "evidence", "expression"
+        ]
+    )
 
 
 @dataclass
@@ -122,6 +134,7 @@ class EidolonConfig:
     security: SecuritySettings = field(default_factory=SecuritySettings)
     web: WebSettings = field(default_factory=WebSettings)
     synthetic: SyntheticSettings = field(default_factory=SyntheticSettings)
+    neural: NeuralSettings = field(default_factory=NeuralSettings)
     orchestrator: OrchestratorSettings = field(default_factory=OrchestratorSettings)
 
 
@@ -140,6 +153,7 @@ def load_config(path: Optional[str] = None) -> EidolonConfig:
         security=SecuritySettings(**data.get("security", {})),
         web=_parse_web_settings(data.get("web", {})),
         synthetic=SyntheticSettings(**data.get("synthetic", {})),
+        neural=NeuralSettings(**data.get("neural", {})),
         orchestrator=OrchestratorSettings(**data.get("orchestrator", {})),
     )
 
@@ -172,6 +186,10 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "parameter_groups": config.synthetic.parameter_groups,
             "context_vault_size": config.synthetic.context_vault_size,
             "max_harvest_queries": config.synthetic.max_harvest_queries,
+        },
+        "neural": {
+            "parameter_count": config.neural.parameter_count,
+            "layers": config.neural.layers,
         },
         "orchestrator": {"trace_path": config.orchestrator.trace_path},
     }
