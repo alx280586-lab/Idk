@@ -77,6 +77,9 @@ class WebSettings:
     autostart: bool = True
     cycle_batch_size: int = 50
     cycle_interval: float = 1.0
+    unrestricted_access: bool = True
+    trust_threshold: float = 0.6
+    max_open_web_samples: int = 24
     seeds: List[WebSeed] = field(
         default_factory=lambda: [
             WebSeed(
@@ -98,6 +101,7 @@ class SyntheticSettings:
     """Controls the procedural+parametric hybrid thought engine."""
 
     parameter_count: int = 3_200_000
+    parameter_groups: int = 16
     context_vault_size: int = 360
     max_harvest_queries: int = 4
 
@@ -149,10 +153,14 @@ def save_default_config(path: str = DEFAULT_CONFIG_PATH) -> None:
             "autostart": config.web.autostart,
             "cycle_batch_size": config.web.cycle_batch_size,
             "cycle_interval": config.web.cycle_interval,
+            "unrestricted_access": config.web.unrestricted_access,
+            "trust_threshold": config.web.trust_threshold,
+            "max_open_web_samples": config.web.max_open_web_samples,
             "seeds": [vars(seed) for seed in config.web.seeds],
         },
         "synthetic": {
             "parameter_count": config.synthetic.parameter_count,
+            "parameter_groups": config.synthetic.parameter_groups,
             "context_vault_size": config.synthetic.context_vault_size,
             "max_harvest_queries": config.synthetic.max_harvest_queries,
         },
@@ -175,6 +183,9 @@ def _parse_web_settings(data: dict) -> WebSettings:
         autostart=data.get("autostart", defaults.autostart),
         cycle_batch_size=data.get("cycle_batch_size", defaults.cycle_batch_size),
         cycle_interval=data.get("cycle_interval", defaults.cycle_interval),
+        unrestricted_access=data.get("unrestricted_access", defaults.unrestricted_access),
+        trust_threshold=data.get("trust_threshold", defaults.trust_threshold),
+        max_open_web_samples=data.get("max_open_web_samples", defaults.max_open_web_samples),
         seeds=seeds or defaults.seeds,
     )
     return settings

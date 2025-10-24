@@ -1,8 +1,10 @@
 """Web growth subsystem for ingesting curated external knowledge."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Dict
+import math
+import re
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, TYPE_CHECKING
 
 from .memory import MemoryWeb
 from .firewall import FirewallRing
@@ -12,6 +14,9 @@ from .curriculum import (
     stage_lesson_iterator,
     trusted_source_blueprints,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - type-only import
+    from .config import WebSettings
 
 
 @dataclass
@@ -58,6 +63,8 @@ class AutoTrainingReport:
     curriculum_stage: str
     quiz_score: float
     stage_complete: bool
+    trust_notes: List[str] = field(default_factory=list)
+    average_trust: float = 0.0
 
     def render(self) -> str:
         header = [
@@ -68,6 +75,11 @@ class AutoTrainingReport:
         ]
         if self.stage_complete:
             header.append("- Stage milestone achieved! Progressing to deeper skills.")
+        if self.trust_notes:
+            header.append(f"- Average trust score: {self.average_trust:.2f}")
+            header.append("- Trust assessments:")
+            for note in self.trust_notes[:12]:
+                header.append(f"  • {note}")
         if not self.highlights:
             header.append("- No new trusted sources matched the request.")
             return "\n".join(header)
@@ -91,6 +103,27 @@ class CurriculumProgress:
     quiz_score: float = 0.0
 
 
+@dataclass(frozen=True)
+class TrustAssessment:
+    """Represents the trust analysis for an arbitrary domain."""
+
+    domain: str
+    score: float
+    tier: str
+    rationale: str
+
+
+@dataclass(frozen=True)
+class OpenWebSource:
+    """Container describing an unrestricted open-web candidate."""
+
+    domain: str
+    topic: str
+    summary: str
+    insight: str
+    focus: str
+
+
 def _build_autonomous_sources() -> List[AutonomousSource]:
     sources: List[AutonomousSource] = []
     for blueprint in trusted_source_blueprints():
@@ -110,12 +143,243 @@ def _build_autonomous_sources() -> List[AutonomousSource]:
 
 AUTONOMOUS_SOURCES: List[AutonomousSource] = _build_autonomous_sources()
 
+
+class DomainTrustEvaluator:
+    """Scores arbitrary domains using transparent heuristics."""
+
+    _TLD_WEIGHTS: Dict[str, float] = {
+        "gov": 0.32,
+        "mil": 0.28,
+        "edu": 0.26,
+        "org": 0.18,
+        "net": 0.12,
+        "com": 0.1,
+        "dev": 0.14,
+        "io": 0.12,
+        "ai": 0.12,
+        "co": 0.08,
+        "us": 0.08,
+        "uk": 0.08,
+        "ca": 0.08,
+        "au": 0.08,
+        "jp": 0.08,
+        "de": 0.08,
+        "fr": 0.08,
+    }
+
+    _CREDIBILITY_KEYWORDS: Tuple[str, ...] = (
+        "docs",
+        "developer",
+        "api",
+        "wikipedia",
+        "encyclopedia",
+        "standard",
+        "spec",
+        "kb",
+        "support",
+        "manual",
+        "research",
+    )
+
+    _RISK_KEYWORDS: Tuple[str, ...] = (
+        "casino",
+        "torrent",
+        "gamble",
+        "spam",
+        "malware",
+        "hack",
+        "exploit",
+        "leak",
+        "fan",
+        "rumor",
+    )
+
+    def __init__(self, parameter_budget: int, parameter_groups: int) -> None:
+        self._parameter_budget = max(1, parameter_budget)
+        self._parameter_groups = max(1, parameter_groups)
+        self._cache: Dict[str, TrustAssessment] = {}
+
+    def evaluate(self, domain: str, focus_terms: Sequence[str]) -> TrustAssessment:
+        canonical = domain.lower().strip()
+        cached = self._cache.get(canonical)
+        if cached:
+            return cached
+        score = 0.45
+        tld = self._extract_tld(canonical)
+        score += self._TLD_WEIGHTS.get(tld, 0.05)
+        parameter_bonus = math.log10(self._parameter_budget * self._parameter_groups + 1.0) / 10.0
+        score += min(0.25, parameter_bonus)
+        token_bonus = min(0.18, len(focus_terms) / 40.0)
+        score += token_bonus
+        credibility_hits = [kw for kw in self._CREDIBILITY_KEYWORDS if kw in canonical]
+        if credibility_hits:
+            score += 0.08 + 0.02 * len(credibility_hits)
+        risk_hits = [kw for kw in self._RISK_KEYWORDS if kw in canonical]
+        if risk_hits:
+            score -= 0.12 + 0.03 * len(risk_hits)
+        score = max(0.05, min(0.99, score))
+        if score >= 0.86:
+            tier = "A"
+        elif score >= 0.72:
+            tier = "B"
+        elif score >= 0.6:
+            tier = "C"
+        else:
+            tier = "D"
+        rationale_bits = [f"TLD {tld or 'unknown'}"]
+        if credibility_hits:
+            rationale_bits.append(f"credibility markers: {', '.join(credibility_hits[:3])}")
+        if risk_hits:
+            rationale_bits.append(f"risks: {', '.join(risk_hits[:2])}")
+        if focus_terms:
+            rationale_bits.append(f"focus alignment ×{len(focus_terms)}")
+        rationale_bits.append(f"parameter leverage {self._parameter_budget:,}")
+        rationale = ", ".join(rationale_bits)
+        assessment = TrustAssessment(domain=canonical, score=score, tier=tier, rationale=rationale)
+        self._cache[canonical] = assessment
+        return assessment
+
+    @staticmethod
+    def _extract_tld(domain: str) -> str:
+        parts = domain.split(".")
+        return parts[-1] if parts and parts[-1] else ""
+
+
+class OpenWebUniverse:
+    """Generates open-web candidates and applies trust filtering."""
+
+    def __init__(
+        self,
+        *,
+        trust_threshold: float,
+        max_samples: int,
+        parameter_budget: int,
+        parameter_groups: int,
+    ) -> None:
+        self._trust_threshold = max(0.0, min(0.99, trust_threshold))
+        self._max_samples = max(6, max_samples)
+        self._evaluator = DomainTrustEvaluator(parameter_budget, parameter_groups)
+        self._reference_domains: Tuple[str, ...] = (
+            "wikipedia.org",
+            "britannica.com",
+            "developer.roblox.com",
+            "create.roblox.com",
+            "education.roblox.com",
+            "docs.python.org",
+            "docs.microsoft.com",
+            "opensource.guide",
+            "khanacademy.org",
+            "mit.edu",
+            "nasa.gov",
+            "noaa.gov",
+            "who.int",
+            "un.org",
+            "robloxdevforum.com",
+            "stackoverflow.com",
+            "w3.org",
+        )
+        self._prefixes: Tuple[str, ...] = ("", "www.", "docs.", "developer.", "api.", "learn.", "support.", "en.")
+        self._tlds: Tuple[str, ...] = (
+            "gov",
+            "edu",
+            "org",
+            "com",
+            "net",
+            "dev",
+            "io",
+            "ai",
+            "info",
+            "co",
+            "tech",
+            "science",
+            "research",
+            "wiki",
+        )
+        self._default_focus: Tuple[str, ...] = (
+            "knowledge",
+            "education",
+            "engineering",
+            "science",
+            "ethics",
+            "governance",
+        )
+
+    def harvest(
+        self, focus_tokens: Set[str], request_batch: int
+    ) -> Tuple[List[Tuple[OpenWebSource, TrustAssessment]], List[str]]:
+        tokens = [token for token in sorted(focus_tokens) if token]
+        if not tokens:
+            tokens = list(self._default_focus)
+        candidate_limit = max(self._max_samples * 2, request_batch * 6)
+        candidate_domains = self._generate_candidates(tokens, candidate_limit)
+        accepted: List[Tuple[OpenWebSource, TrustAssessment]] = []
+        notes: List[str] = []
+        for domain in candidate_domains:
+            assessment = self._evaluator.evaluate(domain, tokens)
+            status = "Accepted" if assessment.score >= self._trust_threshold else "Discarded"
+            notes.append(
+                f"{status} {assessment.domain} (score {assessment.score:.2f}, tier {assessment.tier}) — {assessment.rationale}"
+            )
+            if assessment.score < self._trust_threshold:
+                continue
+            source = self._build_source(domain, tokens, assessment)
+            accepted.append((source, assessment))
+            if len(accepted) >= max(self._max_samples, request_batch):
+                break
+        return accepted, notes
+
+    def _generate_candidates(self, tokens: Sequence[str], limit: int) -> List[str]:
+        seen: List[str] = []
+        for token in tokens:
+            sanitized = re.sub(r"[^a-z0-9]+", "", token.lower())
+            if not sanitized:
+                continue
+            for prefix in self._prefixes:
+                for tld in self._tlds:
+                    domain = f"{prefix}{sanitized}.{tld}" if prefix else f"{sanitized}.{tld}"
+                    domain = domain.replace("..", ".")
+                    if domain not in seen:
+                        seen.append(domain)
+                        if len(seen) >= limit:
+                            return seen
+        for reference in self._reference_domains:
+            if reference not in seen:
+                seen.append(reference)
+                if len(seen) >= limit:
+                    break
+        return seen
+
+    def _build_source(
+        self, domain: str, tokens: Sequence[str], assessment: TrustAssessment
+    ) -> OpenWebSource:
+        focus_text = ", ".join(tokens[:4]) or "general knowledge"
+        topic_slug = domain.replace(".", "::")
+        summary = f"Open web sweep of {domain} centred on {focus_text}."
+        insight = (
+            f"Trust tier {assessment.tier} with score {assessment.score:.2f}; {assessment.rationale}."
+        )
+        return OpenWebSource(
+            domain=domain,
+            topic=f"open_web::{topic_slug}",
+            summary=summary,
+            insight=insight,
+            focus=focus_text,
+        )
+
 class WebGrowthSystem:
     """Validates and imports external findings into the Memory Web."""
 
-    def __init__(self, memory: MemoryWeb, firewall: FirewallRing) -> None:
+    def __init__(
+        self,
+        memory: MemoryWeb,
+        firewall: FirewallRing,
+        settings: Optional["WebSettings"] = None,
+        parameter_budget: int = 3_200_000,
+        parameter_groups: int = 16,
+    ) -> None:
         self._memory = memory
         self._firewall = firewall
+        self._settings = settings
         self._crawl_log: List[str] = []
         self._autonomous_cursor = 0
         self._curriculum_stages: List[CurriculumStage] = list(CURRICULUM_STAGES)
@@ -128,6 +392,16 @@ class WebGrowthSystem:
             stage.name: stage_lesson_iterator(stage)
             for stage in self._curriculum_stages
         }
+        unrestricted = settings.unrestricted_access if settings else True
+        trust_threshold = settings.trust_threshold if settings else 0.6
+        max_open_samples = settings.max_open_web_samples if settings else 24
+        self._unrestricted = unrestricted
+        self._open_web = OpenWebUniverse(
+            trust_threshold=trust_threshold,
+            max_samples=max_open_samples,
+            parameter_budget=parameter_budget,
+            parameter_groups=parameter_groups,
+        )
 
     def register_additional_sources(
         self, sources: Iterable[AutonomousSource]
@@ -223,9 +497,13 @@ class WebGrowthSystem:
 
         focus_text = (focus or "").strip()
         focus_tokens = {token for token in focus_text.lower().split() if token}
-        stage_highlights, studied_stage, quiz_score, stage_complete, stage_count = self._advance_curriculum(
-            max(1, batch_size // 2)
-        )
+        (
+            stage_highlights,
+            studied_stage,
+            quiz_score,
+            stage_complete,
+            stage_count,
+        ) = self._advance_curriculum(max(1, batch_size // 2))
         if focus_tokens:
             pool: List[AutonomousSource] = []
             for source in AUTONOMOUS_SOURCES:
@@ -274,8 +552,44 @@ class WebGrowthSystem:
                     kind="web",
                 )
             )
-        highlights = stage_highlights + web_highlights
-        imported = stage_count + len(web_highlights)
+        open_highlights: List[AutoTrainingHighlight] = []
+        trust_notes: List[str] = []
+        average_trust = 0.0
+        if self._unrestricted:
+            accepted, trust_notes = self._harvest_open_web(focus_tokens, batch_size)
+            if accepted:
+                average_trust = sum(assessment.score for _, assessment in accepted) / len(accepted)
+            for source, assessment in accepted:
+                content = f"{source.summary} {source.insight}"
+                confidence = 0.55 + 0.35 * assessment.score
+                self._memory.record(
+                    source.topic,
+                    content,
+                    min(0.98, confidence),
+                    "open_web",
+                )
+                self._memory.record(
+                    f"autonomy::trust::{source.topic}",
+                    (
+                        f"Confirmed {source.focus} from {assessment.domain}"
+                        f" with trust {assessment.score:.2f} ({assessment.tier})."
+                    ),
+                    0.6 + 0.25 * assessment.score,
+                    "open_web",
+                )
+                self._crawl_log.append(f"https://{source.domain}")
+                open_highlights.append(
+                    AutoTrainingHighlight(
+                        source=f"https://{source.domain}",
+                        topic=source.topic,
+                        summary=source.summary,
+                        insight=f"{source.insight} (trust {assessment.score:.2f})",
+                        tier=assessment.tier,
+                        kind="open-web",
+                    )
+                )
+        highlights = stage_highlights + web_highlights + open_highlights
+        imported = stage_count + len(web_highlights) + len(open_highlights)
         return AutoTrainingReport(
             focus=focus_text,
             imported=imported,
@@ -283,4 +597,11 @@ class WebGrowthSystem:
             curriculum_stage=studied_stage,
             quiz_score=quiz_score,
             stage_complete=stage_complete,
+            trust_notes=trust_notes,
+            average_trust=average_trust,
         )
+
+    def _harvest_open_web(
+        self, focus_tokens: Set[str], batch_size: int
+    ) -> Tuple[List[Tuple[OpenWebSource, TrustAssessment]], List[str]]:
+        return self._open_web.harvest(focus_tokens, batch_size)

@@ -42,9 +42,16 @@ class EidolonPrimeApp:
         )
         forge = Forge(memory)
         reflection = ReflectionEngine(personality, memory)
-        web_growth = WebGrowthSystem(memory, firewall)
+        web_growth = WebGrowthSystem(
+            memory,
+            firewall,
+            config.web,
+            config.synthetic.parameter_count,
+            config.synthetic.parameter_groups,
+        )
         synthetic = SyntheticThoughtEngine(
             parameter_count=config.synthetic.parameter_count,
+            parameter_groups=config.synthetic.parameter_groups,
             context_vault_size=config.synthetic.context_vault_size,
             max_harvest_queries=config.synthetic.max_harvest_queries,
         )

@@ -165,11 +165,13 @@ class ContextVault:
 class ParameterTuner:
     """Simulated micro-parameter bank that nudges procedural modules."""
 
-    def __init__(self, parameter_count: int) -> None:
+    def __init__(self, parameter_count: int, groups: int = 8) -> None:
         self._parameter_count = parameter_count
+        self._group_count = max(1, groups)
         self._entropy_bias = 0.4
         self._precision_bias = 0.6
         self._symbolic_bias = 0.5
+        self._group_biases: List[float] = [0.5 for _ in range(self._group_count)]
         self._last_snapshot: Dict[str, float] = {}
 
     def calibrate(
@@ -185,12 +187,19 @@ class ParameterTuner:
         else:
             self._precision_bias = 0.55 + min(0.2, message_length / 240.0)
         self._symbolic_bias = 0.48 + min(0.25, vocabulary_size / 120.0)
-        self._last_snapshot = {
+        for index in range(self._group_count):
+            phase = (message_length * (index + 1) + vocabulary_size) % 17
+            self._group_biases[index] = 0.38 + 0.22 * math.sin(phase / 5.0)
+        snapshot: Dict[str, float] = {
             "parameters": float(self._parameter_count),
+            "group_count": float(self._group_count),
             "entropy_bias": self._entropy_bias,
             "precision_bias": self._precision_bias,
             "symbolic_bias": self._symbolic_bias,
         }
+        for idx, bias in enumerate(self._group_biases, start=1):
+            snapshot[f"group_bias_{idx}"] = bias
+        self._last_snapshot = snapshot
         return self._last_snapshot
 
     @property
@@ -199,6 +208,11 @@ class ParameterTuner:
 
     def snapshot(self) -> Dict[str, float]:
         return dict(self._last_snapshot)
+
+    def bias_for_module(self, module_index: int) -> float:
+        if not self._group_biases:
+            return self._entropy_bias
+        return self._group_biases[module_index % self._group_count]
 
 
 @dataclass(frozen=True)
@@ -226,12 +240,13 @@ class SyntheticThoughtEngine:
         self,
         parameter_count: int = 3_200_000,
         *,
+        parameter_groups: int = 16,
         context_vault_size: int = 320,
         max_harvest_queries: int = 3,
     ) -> None:
         self._modules: List[ProceduralModule] = _build_modules()
         self._vault = ContextVault(capacity=context_vault_size)
-        self._parameters = ParameterTuner(parameter_count)
+        self._parameters = ParameterTuner(parameter_count, groups=parameter_groups)
         self._knowledge_fields: Tuple[ProceduralKnowledgeField, ...] = _build_knowledge_fields()
         self._max_harvest_queries = max_harvest_queries
         self._seeded = False
@@ -251,8 +266,12 @@ class SyntheticThoughtEngine:
         )
         context_links = self._vault.related(understanding)
         module_traces: List[ModuleTrace] = []
-        for module in self._modules:
-            trace = module.evaluate(understanding, context_links, self._parameters.entropy_bias)
+        for index, module in enumerate(self._modules):
+            trace = module.evaluate(
+                understanding,
+                context_links,
+                self._parameters.bias_for_module(index),
+            )
             if trace:
                 module_traces.append(trace)
         module_traces.sort(key=lambda trace: trace.score, reverse=True)
