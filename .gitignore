@@ -1,14 +1,22 @@
-# A fast, small, safe, gradually typed embeddable scripting language derived from Lua
-#
-# https://github.com/luau-lang/luau
-# https://luau.org/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
 
-# Code coverage
+# Node
+node_modules/
+frontend/node_modules/
+*.log
+
+# OS
+.DS_Store
+
+# Coverage & profiling
 coverage.out
-
-# Profiling
 profile.out
 profile.svg
-
-# Time trace
 trace.json
