@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Sequence
 
 import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from ..analysis.storm_detection import StormDetector
-from ..analysis.warnings import WarningEngine
+from ..analysis.warnings import WarningEngine, WarningType
 from ..data.products import RadarProductComputer
 from ..data.synthetic_generator import SyntheticRadarGenerator
 from ..simulation.clock import SimulationClock
@@ -28,12 +28,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1200, 800)
 
         self.generator = SyntheticRadarGenerator()
-        self.detector = StormDetector()
+        self.detector = StormDetector(domain_size=self.generator.domain_size)
         domain = np.array(self.generator.domain_size)
         self.warning_engine = WarningEngine(domain)
         self.clock = SimulationClock()
 
         self.product_selection = ProductSelection(field="reflectivity", elevation_index=0)
+        self._current_description = "Reflectivity"
 
         self.canvas = RadarCanvas()
         self.canvas.set_domain_size(self.generator.domain_size)
@@ -46,12 +47,23 @@ class MainWindow(QtWidgets.QMainWindow):
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         layout = QtWidgets.QHBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        controls = QtWidgets.QVBoxLayout()
-        layout.addLayout(controls, stretch=0)
-        layout.addWidget(self.canvas, stretch=1)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        layout.addWidget(splitter)
 
-        controls.addWidget(QtWidgets.QLabel("Radar Product"))
+        controls_widget = QtWidgets.QWidget()
+        controls_widget.setMinimumWidth(280)
+        splitter.addWidget(controls_widget)
+        splitter.addWidget(self.canvas)
+        splitter.setStretchFactor(1, 1)
+
+        controls = QtWidgets.QVBoxLayout(controls_widget)
+        controls.setContentsMargins(8, 8, 8, 8)
+        controls.setSpacing(10)
+
+        product_group = QtWidgets.QGroupBox("Display Controls")
+        product_form = QtWidgets.QFormLayout(product_group)
         self.product_combo = QtWidgets.QComboBox()
         self.product_combo.addItems(
             [
@@ -67,27 +79,53 @@ class MainWindow(QtWidgets.QMainWindow):
             ]
         )
         self.product_combo.currentIndexChanged.connect(self._on_product_changed)
-        controls.addWidget(self.product_combo)
-
-        controls.addWidget(QtWidgets.QLabel("Elevation"))
         self.elevation_spin = QtWidgets.QSpinBox()
         self.elevation_spin.setRange(0, self.generator.grid_shape[0] - 1)
         self.elevation_spin.setValue(0)
         self.elevation_spin.valueChanged.connect(self._on_elevation_changed)
-        controls.addWidget(self.elevation_spin)
+        product_form.addRow("Radar Product", self.product_combo)
+        product_form.addRow("Elevation", self.elevation_spin)
+        controls.addWidget(product_group)
 
+        simulation_group = QtWidgets.QGroupBox("Simulation Control")
+        simulation_layout = QtWidgets.QHBoxLayout(simulation_group)
         self.pause_button = QtWidgets.QPushButton("Pause")
         self.pause_button.clicked.connect(self._toggle_pause)
-        controls.addWidget(self.pause_button)
-
+        simulation_layout.addWidget(self.pause_button)
         self.skip_button = QtWidgets.QPushButton("Skip +5 min")
         self.skip_button.clicked.connect(lambda: self.clock.skip_ahead(300))
-        controls.addWidget(self.skip_button)
+        simulation_layout.addWidget(self.skip_button)
+        controls.addWidget(simulation_group)
 
-        controls.addWidget(QtWidgets.QLabel("Active Warnings"))
+        warning_group = QtWidgets.QGroupBox("Active Warnings")
+        warning_layout = QtWidgets.QVBoxLayout(warning_group)
         self.warning_list = QtWidgets.QListWidget()
-        self.warning_list.setMinimumWidth(220)
-        controls.addWidget(self.warning_list)
+        self.warning_list.setAlternatingRowColors(True)
+        self.warning_list.setMinimumHeight(140)
+        warning_layout.addWidget(self.warning_list)
+        controls.addWidget(warning_group)
+
+        storm_group = QtWidgets.QGroupBox("Storm Monitor")
+        storm_layout = QtWidgets.QVBoxLayout(storm_group)
+        self.storm_table = QtWidgets.QTableWidget(0, 6)
+        self.storm_table.setHorizontalHeaderLabels(
+            ["ID", "Age (min)", "Max dBZ", "Rotation", "Hail (in)", "Rain (in/hr)"]
+        )
+        self.storm_table.verticalHeader().setVisible(False)
+        self.storm_table.setAlternatingRowColors(True)
+        self.storm_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.storm_table.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.storm_table.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.storm_table.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        header = self.storm_table.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        storm_layout.addWidget(self.storm_table)
+        controls.addWidget(storm_group)
 
         controls.addStretch(1)
 
@@ -125,21 +163,26 @@ class MainWindow(QtWidgets.QMainWindow):
             description = "Reflectivity"
             units = "dBZ"
 
-        self.canvas.update_ppi(display_data, description, units)
+        self.canvas.update_ppi(display_data, description, units, selection.field)
+        self._current_description = description
 
         storms = self.detector.detect(volume, self.clock.time_seconds)
         issued = self.warning_engine.update(self.clock.time_seconds, storms)
         self.canvas.render_warnings(self.warning_engine.active)
 
+        self._refresh_storm_table(storms)
         self._update_status(storms, issued)
-        self._refresh_warning_list()
+        self._refresh_warning_list(issued)
 
     def _update_status(self, storms, warnings) -> None:
+        issued_text = f" | Issued: {len(warnings)}" if warnings else ""
         message = (
-            f"Time: {self.clock.time_seconds/60:.1f} min | "
+            f"Time {self.clock.time_seconds/60:.1f} min | {self._current_description} | "
             f"Storms: {len(storms)} | Active warnings: {len(self.warning_engine.active)}"
+            f"{issued_text}"
         )
-        self.status.showMessage(message)
+        timeout = 5000 if warnings else 0
+        self.status.showMessage(message, timeout)
 
     def _toggle_pause(self) -> None:
         self.clock.toggle_running()
@@ -170,11 +213,99 @@ class MainWindow(QtWidgets.QMainWindow):
             field=self.product_selection.field, elevation_index=value
         )
 
-    def _refresh_warning_list(self) -> None:
+    def _refresh_warning_list(self, recently_issued: Sequence = ()) -> None:
         self.warning_list.clear()
-        for polygon in self.warning_engine.active.values():
+        priority = {
+            WarningType.TORNADO_EMERGENCY: 0,
+            WarningType.TORNADO: 1,
+            WarningType.SEVERE_THUNDERSTORM: 2,
+            WarningType.FLASH_FLOOD: 3,
+        }
+        recent_ids = {
+            polygon.metadata.get("storm_id") for polygon in recently_issued if polygon is not None
+        }
+        polygons = sorted(
+            self.warning_engine.active.values(),
+            key=lambda poly: (priority.get(poly.warning_type, 4), poly.valid_until),
+        )
+        for polygon in polygons:
             label = polygon.warning_type.name.replace("_", " ")
             hazard = polygon.metadata.get("hazard", "")
             expires = polygon.valid_until - self.clock.time_seconds
             minutes = max(expires / 60.0, 0.0)
-            self.warning_list.addItem(f"{label}: {hazard} ({minutes:.0f} min left)")
+            confidence = polygon.metadata.get("confidence")
+            confidence_text = (
+                f"{confidence * 100:.0f}%" if isinstance(confidence, (float, int)) else ""
+            )
+            storm_id = polygon.metadata.get("storm_id")
+            parts = [label]
+            if storm_id is not None:
+                parts.append(f"Storm {storm_id}")
+            if hazard:
+                parts.append(hazard)
+            if confidence_text:
+                parts.append(f"Confidence {confidence_text}")
+            text = " | ".join(parts)
+            text += f" ({minutes:.0f} min left)"
+            item = QtWidgets.QListWidgetItem(text)
+            color = QtGui.QColor(self.canvas.color_for_warning(polygon.warning_type))
+            item.setForeground(color)
+            if storm_id in recent_ids:
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            self.warning_list.addItem(item)
+
+    def _refresh_storm_table(self, storms: Sequence) -> None:
+        storms_sorted = sorted(
+            storms,
+            key=lambda s: (
+                getattr(s, "max_rotation", 0.0),
+                getattr(s, "mesh", 0.0),
+                getattr(s, "max_reflectivity", 0.0),
+            ),
+            reverse=True,
+        )
+        self.storm_table.setRowCount(len(storms_sorted))
+        for row, storm in enumerate(storms_sorted):
+            age_minutes = getattr(storm, "age_seconds", 0.0) / 60.0
+            rainfall_in_hr = getattr(storm, "rainfall_rate", 0.0) / 25.4
+            values = [
+                str(storm.id),
+                f"{age_minutes:.1f}",
+                f"{storm.max_reflectivity:.0f}",
+                f"{storm.max_rotation:.0f}",
+                f"{storm.mesh:.2f}",
+                f"{rainfall_in_hr:.1f}",
+            ]
+            for col, text in enumerate(values):
+                self._set_table_item(row, col, text)
+
+            tooltip = (
+                f"Storm {storm.id}\n"
+                f"Age: {age_minutes:.1f} min\n"
+                f"Max Reflectivity: {storm.max_reflectivity:.1f} dBZ\n"
+                f"Rotation: {storm.max_rotation:.1f}\n"
+                f"MESH: {storm.mesh:.2f} in\n"
+                f"Rainfall: {rainfall_in_hr:.1f} in/hr\n"
+                f"Area: {storm.area_km2:.0f} km²"
+            )
+            highlight = None
+            if storm.max_rotation >= 45.0:
+                highlight = QtGui.QColor("#ffe0e0")
+            elif storm.mesh >= 1.2:
+                highlight = QtGui.QColor("#fff3cc")
+            for col in range(self.storm_table.columnCount()):
+                item = self.storm_table.item(row, col)
+                if item is not None:
+                    item.setToolTip(tooltip)
+                    if highlight is not None:
+                        item.setBackground(highlight)
+
+    def _set_table_item(self, row: int, column: int, text: str) -> None:
+        item = QtWidgets.QTableWidgetItem(text)
+        item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        item.setFlags(
+            QtCore.Qt.ItemFlag.ItemIsSelectable | QtCore.Qt.ItemFlag.ItemIsEnabled
+        )
+        self.storm_table.setItem(row, column, item)

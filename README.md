@@ -12,7 +12,8 @@ issues SPC-style severe weather alerts from simulated data.
   estimates
 - Automatic storm detection with warning generation for severe thunderstorm,
   tornado, tornado emergency, and flash flood scenarios
-- PyQt6 desktop interface with interactive product selection and time controls
+- PyQt6 desktop interface with interactive product selection, storm dashboard,
+  and confidence-aware warning summaries
 
 ## Running
 

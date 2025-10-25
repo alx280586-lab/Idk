@@ -33,20 +33,18 @@ class StormCellState:
         self.center = (self.center + (self.velocity + jitter) * minutes) % domain_array
         self.age = min(self.age + dt, self.lifespan)
 
-        growth_phase = np.clip(self.age / (0.4 * self.lifespan), 0.0, 1.0)
-        decay_phase = np.clip((self.age - 0.6 * self.lifespan) / (0.4 * self.lifespan), 0.0, 1.0)
+        normalized_age = np.clip(self.age / self.lifespan, 0.0, 1.0)
+        growth_phase = np.clip(normalized_age / 0.65, 0.0, 1.0) ** 1.6
+        decay_phase = np.clip((normalized_age - 0.55) / 0.45, 0.0, 1.0)
 
-        self._current_intensity = np.interp(growth_phase, [0, 1], [20.0, self.peak_intensity])
-        self._current_intensity *= 1.0 - 0.6 * decay_phase
+        def smooth_profile(peak: float, base: float) -> float:
+            value = base + (peak - base) * growth_phase
+            return float(value * (1.0 - 0.65 * decay_phase))
 
-        self._current_rotation = np.interp(growth_phase, [0, 1], [5.0, self.peak_rotation])
-        self._current_rotation *= 1.0 - 0.7 * decay_phase
-
-        self._current_hail = np.interp(growth_phase, [0, 1], [0.2, self.peak_hail])
-        self._current_hail *= 1.0 - 0.6 * decay_phase
-
-        self._current_rainfall = np.interp(growth_phase, [0, 1], [5.0, self.peak_rainfall])
-        self._current_rainfall *= 1.0 - 0.6 * decay_phase
+        self._current_intensity = smooth_profile(self.peak_intensity, base=8.0)
+        self._current_rotation = smooth_profile(self.peak_rotation, base=4.0)
+        self._current_hail = smooth_profile(self.peak_hail, base=0.1)
+        self._current_rainfall = smooth_profile(self.peak_rainfall, base=8.0)
 
     @property
     def intensity(self) -> float:
@@ -119,10 +117,10 @@ class SyntheticRadarGenerator:
             column = np.exp(-np.linspace(0, 1.5, self.grid_shape[0]))[:, None, None]
             cell_reflectivity = cell.intensity * footprint * column
             z += cell_reflectivity
-            rotation_pattern = (dx * cell.velocity[1] - dy * cell.velocity[0]) / 10.0
-            v += rotation_pattern * column * 3.0 + cell.velocity[0]
-            zdr += (1.0 + 0.3 * self.rng.standard_normal()) * footprint * column
-            cc -= 0.05 * footprint * column * (cell.rotation > 30)
+            rotation_pattern = (dx * cell.velocity[1] - dy * cell.velocity[0]) / 18.0
+            v += rotation_pattern * column * 2.0 + cell.velocity[0]
+            zdr += (1.0 + 0.25 * self.rng.standard_normal()) * footprint * column
+            cc -= 0.05 * footprint * column * (cell.rotation > 45)
             kdp += (cell.rainfall_rate / 25.0) * footprint * column
             sw += np.abs(rotation_pattern) * column * 0.5
 
@@ -153,9 +151,9 @@ class SyntheticRadarGenerator:
         """Update existing storms and spawn new ones as needed."""
 
         # ensure a modest number of simultaneous storms for readability
-        while len(self.cells) < 2:
+        while len(self.cells) < 1:
             self._spawn_cell(time_seconds)
-        if len(self.cells) < 3 and self.rng.random() < dt / 900.0:
+        if len(self.cells) < 3 and self.rng.random() < dt / 1500.0:
             self._spawn_cell(time_seconds)
 
     def _smooth_volume(self, data: np.ndarray) -> np.ndarray:
@@ -170,11 +168,11 @@ class SyntheticRadarGenerator:
         speed_ms = self.rng.uniform(10, 30)
         heading = self.rng.uniform(0, 2 * np.pi)
         velocity = np.array([np.cos(heading), np.sin(heading)]) * (speed_ms * 0.06)
-        peak_intensity = self.rng.uniform(50, 70)
-        peak_rotation = self.rng.uniform(20, 55)
-        peak_hail = self.rng.uniform(0.5, 1.5)
-        peak_rain = self.rng.uniform(40, 90)
-        lifespan = self.rng.uniform(1800, 3600)
+        peak_intensity = self.rng.uniform(48, 68)
+        peak_rotation = self.rng.uniform(18, 45)
+        peak_hail = self.rng.uniform(0.6, 1.8)
+        peak_rain = self.rng.uniform(35, 85)
+        lifespan = self.rng.uniform(2100, 4200)
 
         cell = StormCellState(
             id=self._next_id,
