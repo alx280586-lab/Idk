@@ -1,7 +1,7 @@
 """Matplotlib canvas for radar plan-view visualization."""
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Tuple
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -29,8 +29,10 @@ class RadarCanvas(FigureCanvasQTAgg):
         self.ax.set_title("Radar Reflectivity")
         self.ax.set_xlabel("X (km)")
         self.ax.set_ylabel("Y (km)")
+        self.ax.set_aspect("equal")
         self.image = None
         self.warning_patches: Dict[int, Polygon] = {}
+        self.domain_size: Tuple[float, float] = (200.0, 200.0)
 
     def update_ppi(self, data: np.ndarray, description: str, units: str) -> None:
         vmin = float(np.nanmin(data)) if np.isfinite(data).any() else 0.0
@@ -42,13 +44,17 @@ class RadarCanvas(FigureCanvasQTAgg):
                 cmap="Spectral_r",
                 vmin=vmin,
                 vmax=vmax,
-                interpolation="nearest",
+                interpolation="bilinear",
+                extent=(0, self.domain_size[0], 0, self.domain_size[1]),
             )
             self.colorbar = self.figure.colorbar(self.image, ax=self.ax, label=units)
         else:
             self.image.set_data(data)
             self.image.set_clim(vmin, vmax)
+            self.image.set_extent((0, self.domain_size[0], 0, self.domain_size[1]))
             self.colorbar.set_label(units)
+        self.ax.set_xlim(0, self.domain_size[0])
+        self.ax.set_ylim(0, self.domain_size[1])
         self.ax.set_title(description)
         self.draw_idle()
 
@@ -63,3 +69,6 @@ class RadarCanvas(FigureCanvasQTAgg):
             self.ax.add_patch(patch)
             self.warning_patches[storm_id] = patch
         self.draw_idle()
+
+    def set_domain_size(self, domain_size: Tuple[float, float]) -> None:
+        self.domain_size = domain_size

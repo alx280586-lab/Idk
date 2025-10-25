@@ -71,8 +71,16 @@ class WarningEngine:
             polygon = self._build_polygon(time_seconds, storm)
             if polygon is None:
                 continue
-            active[storm.id] = polygon
-            issued.append(polygon)
+            existing = active.get(storm.id)
+            if existing and existing.warning_type == polygon.warning_type:
+                blended_vertices = self._blend_vertices(existing.vertices, polygon.vertices)
+                existing.vertices = blended_vertices
+                existing.valid_until = max(existing.valid_until, polygon.valid_until)
+                existing.metadata.update(polygon.metadata)
+                active[storm.id] = existing
+            else:
+                active[storm.id] = polygon
+                issued.append(polygon)
 
         self.active = active
         return issued
@@ -81,15 +89,15 @@ class WarningEngine:
         warning_type: WarningType | None = None
         metadata: Dict[str, object] = {}
 
-        if storm.max_rotation > 45 and storm.debris_detected:
+        if storm.max_rotation > 55 and storm.debris_detected:
             warning_type = WarningType.TORNADO_EMERGENCY
             metadata["hazard"] = "Catastrophic tornado damage likely"
             metadata["source"] = "Radar confirmed debris"
-        elif storm.max_rotation > 35:
+        elif storm.max_rotation > 40:
             warning_type = WarningType.TORNADO
             metadata["hazard"] = "Tornado"
             metadata["source"] = "Radar indicated rotation"
-        elif storm.mesh >= 1.0 or storm.max_reflectivity > 60:
+        elif storm.mesh >= 1.25 or storm.max_reflectivity > 65:
             warning_type = WarningType.SEVERE_THUNDERSTORM
             hazard_parts = []
             if storm.mesh >= 1.0:
@@ -98,7 +106,7 @@ class WarningEngine:
                 hazard_parts.append("60+ dBZ core")
             metadata["hazard"] = ", ".join(hazard_parts) or "Severe hail/wind"
             metadata["source"] = "Radar indicated"
-        elif storm.rainfall_rate > 4.0:
+        elif storm.rainfall_rate > 6.0:
             warning_type = WarningType.FLASH_FLOOD
             metadata["hazard"] = "Flash flooding"
             metadata["source"] = "Radar rainfall estimates"
@@ -124,12 +132,37 @@ class WarningEngine:
         return polygon
 
     def _motion_corridor(self, position: np.ndarray, motion: np.ndarray, duration: float) -> np.ndarray:
-        lead_time = np.linspace(0, duration, num=4)
-        trajectory = position[None, :] + motion[None, :] * lead_time[:, None] / 60.0
-        offsets = np.array([[4, 4], [-4, 4], [-4, -4], [4, -4]])
-        polygon = []
-        for point in trajectory:
-            for offset in offsets:
-                candidate = np.clip(point + offset, [0, 0], self.domain_size)
-                polygon.append(candidate)
-        return np.array(polygon)
+        minutes = duration / 60.0
+        speed = float(np.linalg.norm(motion))
+        if speed < 0.5:
+            half_size = 10.0
+            square = np.array(
+                [
+                    position + [-half_size, -half_size],
+                    position + [half_size, -half_size],
+                    position + [half_size, half_size],
+                    position + [-half_size, half_size],
+                ]
+            )
+            return np.clip(square, [0, 0], self.domain_size)
+
+        direction = motion / speed
+        perpendicular = np.array([-direction[1], direction[0]])
+        half_width = 12.0
+        start = position
+        end = position + motion * minutes
+        corridor = np.array(
+            [
+                start + perpendicular * half_width,
+                start - perpendicular * half_width,
+                end - perpendicular * half_width,
+                end + perpendicular * half_width,
+            ]
+        )
+        return np.clip(corridor, [0, 0], self.domain_size)
+
+    def _blend_vertices(self, current: np.ndarray, new: np.ndarray) -> np.ndarray:
+        if current.shape != new.shape:
+            return new
+        weight = 0.3
+        return current * (1 - weight) + new * weight

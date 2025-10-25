@@ -36,6 +36,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.product_selection = ProductSelection(field="reflectivity", elevation_index=0)
 
         self.canvas = RadarCanvas()
+        self.canvas.set_domain_size(self.generator.domain_size)
         self.status = self.statusBar()
 
         self._setup_layout()
@@ -83,6 +84,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.skip_button.clicked.connect(lambda: self.clock.skip_ahead(300))
         controls.addWidget(self.skip_button)
 
+        controls.addWidget(QtWidgets.QLabel("Active Warnings"))
+        self.warning_list = QtWidgets.QListWidget()
+        self.warning_list.setMinimumWidth(220)
+        controls.addWidget(self.warning_list)
+
         controls.addStretch(1)
 
     def _setup_timers(self) -> None:
@@ -121,16 +127,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.canvas.update_ppi(display_data, description, units)
 
-        storms = self.detector.detect(volume)
+        storms = self.detector.detect(volume, self.clock.time_seconds)
         issued = self.warning_engine.update(self.clock.time_seconds, storms)
         self.canvas.render_warnings(self.warning_engine.active)
 
         self._update_status(storms, issued)
+        self._refresh_warning_list()
 
     def _update_status(self, storms, warnings) -> None:
         message = (
             f"Time: {self.clock.time_seconds/60:.1f} min | "
-            f"Storms: {len(storms)} | Warnings issued: {len(warnings)}"
+            f"Storms: {len(storms)} | Active warnings: {len(self.warning_engine.active)}"
         )
         self.status.showMessage(message)
 
@@ -162,3 +169,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.product_selection = ProductSelection(
             field=self.product_selection.field, elevation_index=value
         )
+
+    def _refresh_warning_list(self) -> None:
+        self.warning_list.clear()
+        for polygon in self.warning_engine.active.values():
+            label = polygon.warning_type.name.replace("_", " ")
+            hazard = polygon.metadata.get("hazard", "")
+            expires = polygon.valid_until - self.clock.time_seconds
+            minutes = max(expires / 60.0, 0.0)
+            self.warning_list.addItem(f"{label}: {hazard} ({minutes:.0f} min left)")
