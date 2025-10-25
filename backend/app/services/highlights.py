@@ -24,7 +24,13 @@ def find_highlights(segments: List[TranscriptSegment], min_duration: int, max_du
         sentiment = segment.get("sentiment", 0.0)
         emphasis = segment.get("emphasis", 0.0)
         audience_reaction = segment.get("audience_reaction", 0.0)
-        score = max(0.0, sentiment * 0.4 + emphasis * 0.4 + audience_reaction * 0.2)
+        emotions = segment.get("emotions", {})
+        dominant_emotion = max(emotions, key=emotions.get) if emotions else None
+        emotion_bonus = max((emotions.get(label, 0.0) for label in ("joy", "surprise", "anger")), default=0.0)
+        score = max(
+            0.0,
+            sentiment * 0.35 + emphasis * 0.35 + audience_reaction * 0.2 + emotion_bonus * 0.1,
+        )
         if score > 0.3:
             highlights.append(
                 HighlightCandidate(
@@ -32,6 +38,7 @@ def find_highlights(segments: List[TranscriptSegment], min_duration: int, max_du
                     end=segment["end"],
                     text=segment["text"],
                     score=score,
+                    dominant_emotion=dominant_emotion,
                 )
             )
     highlights.sort(key=lambda candidate: candidate.score, reverse=True)
