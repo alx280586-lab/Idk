@@ -36,13 +36,14 @@ class State:
             return
 
         sample_video_id = str(uuid4())
+        sample_clip_id = str(uuid4())
         clip_task = ClipTask(
             id=sample_video_id,
             source="https://youtube.com/watch?v=dQw4w9WgXcQ",
             status="completed",
             clips=[
                 {
-                    "clip_id": str(uuid4()),
+                    "clip_id": sample_clip_id,
                     "start": 30,
                     "end": 60,
                     "duration": 30,
@@ -52,7 +53,53 @@ class State:
                     "emojis": True,
                     "captions": True,
                     "thumbnail": "https://placehold.co/320x180?text=Clip+1",
+                    "uploads": [
+                        {
+                            "clip_id": sample_clip_id,
+                            "platform": "tiktok",
+                            "status": "uploaded",
+                            "scheduled_time": "2023-01-01T00:00:00Z",
+                            "published_at": "2023-01-01T00:00:00Z",
+                            "share_link": f"https://tiktok.com/clip/{sample_clip_id}",
+                            "job_id": "bootstrap-job-tt",
+                        },
+                        {
+                            "clip_id": sample_clip_id,
+                            "platform": "youtube_shorts",
+                            "status": "uploaded",
+                            "scheduled_time": "2023-01-01T00:00:00Z",
+                            "published_at": "2023-01-01T00:00:00Z",
+                            "share_link": f"https://youtube.com/shorts/{sample_clip_id}",
+                            "job_id": "bootstrap-job-yt",
+                        },
+                    ],
                 }
+            ],
+            most_watched={
+                "start": 25,
+                "end": 55,
+                "text": "Never give up on your goals—momentum compounds.",
+                "viewer_retention": 0.82,
+            },
+            uploads=[
+                {
+                    "clip_id": sample_clip_id,
+                    "platform": "tiktok",
+                    "status": "uploaded",
+                    "scheduled_time": "2023-01-01T00:00:00Z",
+                    "published_at": "2023-01-01T00:00:00Z",
+                    "share_link": f"https://tiktok.com/clip/{sample_clip_id}",
+                    "job_id": "bootstrap-job-tt",
+                },
+                {
+                    "clip_id": sample_clip_id,
+                    "platform": "youtube_shorts",
+                    "status": "uploaded",
+                    "scheduled_time": "2023-01-01T00:00:00Z",
+                    "published_at": "2023-01-01T00:00:00Z",
+                    "share_link": f"https://youtube.com/shorts/{sample_clip_id}",
+                    "job_id": "bootstrap-job-yt",
+                },
             ],
         )
         self.store.clip_requests[sample_video_id] = clip_task

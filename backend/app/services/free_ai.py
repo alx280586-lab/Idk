@@ -65,6 +65,11 @@ class OpenSourceAIProvider:
             segment["emotions"] = emotions
             segment["emphasis"] = _calculate_emphasis(emotions)
             segment["audience_reaction"] = _calculate_reaction(emotions)
+            segment["viewer_retention"] = _calculate_viewer_retention(
+                sentiment_value,
+                segment["emphasis"],
+                segment["audience_reaction"],
+            )
 
 
 def _ensure_iterable_scores(scores: Union[Iterable[Dict[str, float]], Dict[str, float]]) -> List[Dict[str, float]]:
@@ -89,6 +94,15 @@ def _calculate_emphasis(emotions: Dict[str, float]) -> float:
 
 def _calculate_reaction(emotions: Dict[str, float]) -> float:
     return max(0.0, min(1.0, sum(emotions.get(emotion, 0.0) for emotion in REACTION_EMOTIONS)))
+
+
+def _calculate_viewer_retention(sentiment: float, emphasis: float, reaction: float) -> float:
+    """Estimate how sticky a moment is likely to be based on emotional cues."""
+
+    positive_sentiment = max(0.0, sentiment)
+    base = 0.35 + positive_sentiment * 0.25
+    attention = emphasis * 0.3 + reaction * 0.45
+    return max(0.05, min(1.0, base + attention))
 
 
 @lru_cache(maxsize=1)

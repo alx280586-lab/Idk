@@ -40,6 +40,8 @@ class ClipStatusResponse(BaseModel):
     task_id: str
     status: str
     clips: Optional[List[Dict[str, object]]]
+    most_watched: Optional[Dict[str, object]] = None
+    uploads: Optional[List[Dict[str, object]]] = None
 
 
 @dataclass
@@ -60,6 +62,8 @@ class ClipTask:
     source: str
     status: str
     clips: List[Dict[str, object]] = field(default_factory=list)
+    most_watched: Optional[Dict[str, object]] = None
+    uploads: List[Dict[str, object]] = field(default_factory=list)
 
     @classmethod
     def from_request(cls, request: ClipRequest) -> "ClipTask":
@@ -68,11 +72,22 @@ class ClipTask:
             source=request.youtube_url,
             status="processing",
             clips=[],
+            most_watched=None,
+            uploads=[],
         )
 
-    def mark_completed(self, clips: List[Dict[str, object]]) -> None:
+    def mark_completed(
+        self,
+        clips: List[Dict[str, object]],
+        *,
+        most_watched: Optional[Dict[str, object]] = None,
+        uploads: Optional[List[Dict[str, object]]] = None,
+    ) -> None:
         self.status = "completed"
         self.clips = clips
+        self.most_watched = most_watched
+        if uploads is not None:
+            self.uploads = uploads
 
     def mark_failed(self, reason: str) -> None:
         self.status = f"failed:{reason}"

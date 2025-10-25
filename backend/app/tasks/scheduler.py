@@ -22,6 +22,9 @@ def _simulate_processing(task: ClipTask, request: ClipRequest) -> None:
         min_duration=request.clip_duration_min,
         max_duration=request.clip_duration_max,
     )
+    most_watched = highlights.identify_most_watched_segment(
+        segments, max_duration=request.clip_duration_max
+    )
     if not candidates:
         task.mark_failed("no_highlights_found")
     else:
@@ -34,8 +37,12 @@ def _simulate_processing(task: ClipTask, request: ClipRequest) -> None:
             aspect_ratios=request.aspect_ratios,
             target_platforms=request.target_platforms,
         )
-        task.mark_completed(clips)
-        publisher.publish_to_platforms(clips, request.target_platforms)
+        uploads = publisher.publish_to_platforms(clips, request.target_platforms)
+        task.mark_completed(
+            clips,
+            most_watched=dict(most_watched) if most_watched else None,
+            uploads=uploads,
+        )
     State.get_instance().update_clip_task(task)
 
 

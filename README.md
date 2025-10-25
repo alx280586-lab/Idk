@@ -7,6 +7,8 @@ AutoClipper AI is a full-stack prototype that automatically generates, edits, an
 - **Video intelligence** – Ingest YouTube URLs, fetch free transcripts (or fall back to the open Whisper model), detect high-energy moments with Hugging Face emotion models, and produce multi-aspect clips with subtitles/captions toggles.
 - **Smart scheduling** – Configure daily posting quotas, auto-optimization, and platform targets.
 - **Performance analytics** – View AI-generated recommendations, keyword trends, and per-platform stats for completed clips.
+- **Viewer heatmap detection** – Automatically surfaces the most binge-worthy moment per video based on retention and emotion cues.
+- **Hands-free publishing** – Instantly schedules finished clips across TikTok, YouTube Shorts, and Instagram Reels with shareable links.
 - **Trend integration** – Surfaces trending hashtags and topics from major short-form platforms.
 - **Autonomous mode** – Enable always-on automation with adjustable daily clip caps.
 
@@ -75,7 +77,7 @@ frontend/
 
 ## Notes
 
-- Processing, analytics, and publishing are simulated to make the experience demo-ready without external credentials.
+- Processing, analytics, and publishing are simulated to make the experience demo-ready without external credentials, but uploads include shareable links per platform to mirror real-world automation.
 - The transcription layer now prefers the free YouTube Transcript API and falls back to the open-source Whisper model via `faster-whisper` when necessary.
 - Highlight scoring uses Hugging Face emotion and sentiment models (DistilBERT SST-2 + `j-hartmann/emotion-english-distilroberta-base`).
 - Adjust the services layer to connect ffmpeg-powered clip rendering and platform APIs for production use.

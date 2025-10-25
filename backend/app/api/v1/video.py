@@ -39,4 +39,10 @@ def get_clip_status(task_id: str) -> ClipStatusResponse:
     task = state.get_clip_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return ClipStatusResponse(task_id=task.id, status=task.status, clips=task.clips)
+    return ClipStatusResponse(
+        task_id=task.id,
+        status=task.status,
+        clips=task.clips,
+        most_watched=task.most_watched,
+        uploads=task.uploads,
+    )

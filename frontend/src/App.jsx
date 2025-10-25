@@ -1,6 +1,7 @@
 import React from 'react';
 
 import AutomationPanel from './components/AutomationPanel';
+import ClipStatusViewer from './components/ClipStatusViewer';
 import Header from './components/Header';
 import SchedulingForm from './components/SchedulingForm';
 import TrendHighlights from './components/TrendHighlights';
@@ -15,6 +16,10 @@ const App = () => {
         <section className="panel">
           <h2>Generate New Clips</h2>
           <UploadForm />
+        </section>
+        <section className="panel">
+          <h2>Clip Status &amp; Uploads</h2>
+          <ClipStatusViewer />
         </section>
         <section className="panel">
           <h2>Smart Scheduling</h2>
