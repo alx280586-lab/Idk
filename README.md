@@ -53,7 +53,7 @@ Modern browsers enforce CORS checks for module scripts loaded from the local fil
 2. Open your browser to the reported address, such as `http://localhost:8080/`.
 3. When the boot splash appears, configure the simulated day length and optional fast-forwarding, then start the run.
 
-If you need to host the simulator elsewhere, deploy the contents of this repository to any static hosting provider. No backend components are required.
+If you need to host the simulator elsewhere, deploy the contents of this repository to any static hosting provider. No backend components are required. GitHub Pages works out of the box—the bootstrapper trusts any hostname ending in `github.io`, so publishing the repo to your `<user>.github.io` site will load the live ES module build without additional configuration.
 
 ### Rebuilding the offline bundle
 
@@ -61,7 +61,7 @@ Whenever you update files under `src/`, rerun `python3 scripts/build_offline_bun
 
 ### Allowing custom hostnames
 
-The frontend validates `window.location.hostname` against `INSIGHTS_WHITELIST` before loading the WebGL runtime. Common local development hosts—`localhost`, `127.0.0.1`, `0.0.0.0`, and `[::1]`—are permitted automatically. To run behind a different proxy or vanity domain, expose an allow list before the inline bootstrap script executes:
+The frontend validates `window.location.hostname` against `INSIGHTS_WHITELIST` before loading the WebGL runtime. Common local development hosts—`localhost`, `127.0.0.1`, `0.0.0.0`, and `[::1]`—are permitted automatically, and `github.io` domains are accepted for GitHub Pages deployments. To run behind a different proxy or vanity domain, expose an allow list before the inline bootstrap script executes:
 
 ```html
 <script>

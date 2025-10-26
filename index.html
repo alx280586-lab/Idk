@@ -126,6 +126,7 @@
   <script id="bootstrap-script">
     (function () {
       const INSIGHTS_WHITELIST = ["localhost", "127.0.0.1"];
+      const DEFAULT_ALLOWED_PATTERNS = ["github.io"];
 
       function renderBlockingMessage(id, html) {
         const warning = document.createElement("div");
@@ -180,7 +181,7 @@
         ...configuredHosts,
         ...runtimeHosts
       ]);
-      const allowedPatterns = [...configuredPatterns, ...runtimePatterns];
+      const allowedPatterns = [...DEFAULT_ALLOWED_PATTERNS, ...configuredPatterns, ...runtimePatterns];
 
       const hostName = (window.location.hostname || "").toLowerCase();
 
