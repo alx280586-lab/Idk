@@ -540,6 +540,29 @@ html {
   font-size: 0.95rem;
 }
 
+#host-validation-warning button {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #040c1b;
+  background: linear-gradient(135deg, #6cf2ff, #4dd6ff);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 12px 30px rgba(76, 214, 255, 0.35);
+}
+
+#host-validation-warning button:hover,
+#host-validation-warning button:focus {
+  outline: none;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 35px rgba(76, 214, 255, 0.45);
+}
+
 #host-validation-warning .allowed-list {
   display: flex;
   flex-wrap: wrap;

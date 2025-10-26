@@ -134,6 +134,7 @@
         warning.innerHTML = html;
         document.body.appendChild(warning);
         document.documentElement.classList.add("no-bootstrap");
+        return warning;
       }
 
       function injectScript(options) {
@@ -208,10 +209,19 @@
           .concat(allowedPatterns.map((pattern) => `*.${pattern.replace(/^\*?\.?/, "")}`))
           .map((entry) => `<code>${entry}</code>`)
           .join(" ");
-        renderBlockingMessage(
+        const overlay = renderBlockingMessage(
           "host-validation-warning",
-          `<h2>Unsupported host</h2><p>The simulator blocks telemetry and rendering on unknown hosts. Add <code>${hostName}</code> to <code>RADAR_ALLOWED_HOSTS</code> or serve it from one of the allowed domains listed below.</p><p class="allowed-list">Allowed hosts: ${listItems}</p>`
+          `<h2>Unsupported host</h2><p>The simulator blocks telemetry and rendering on unknown hosts. Add <code>${hostName}</code> to <code>RADAR_ALLOWED_HOSTS</code> or serve it from one of the allowed domains listed below.</p><p class="allowed-list">Allowed hosts: ${listItems}</p><p><button type="button" data-action="continue-host">Run anyway</button></p>`
         );
+        const continueBtn = overlay.querySelector("[data-action=continue-host]");
+        if (continueBtn) {
+          continueBtn.addEventListener("click", () => {
+            overlay.remove();
+            document.documentElement.classList.remove("no-bootstrap");
+            injectScript({ type: "module", src: "src/main.js" });
+          });
+          setTimeout(() => continueBtn.focus(), 0);
+        }
         return;
       }
 
