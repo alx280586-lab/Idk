@@ -1,272 +1,390 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>{{ title }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+        :root {
+            color-scheme: dark;
+            --panel-bg: rgba(10, 14, 28, 0.82);
+            --panel-border: rgba(135, 165, 255, 0.18);
+            --accent: #55b7ff;
+            --warning: #ff6b6b;
+            --text: #f5f8ff;
+            --muted: rgba(245, 248, 255, 0.65);
+            font-family: "Inter", "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            font-family: "Inter", "Segoe UI", sans-serif;
-            background: radial-gradient(circle at top, #0a1a33, #000000);
-            color: #f0f4ff;
-            overflow: hidden;
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 20%, #14213d 0%, #050914 55%, #01030a 100%);
+            color: var(--text);
         }
-        #app {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            height: 100vh;
-        }
-        aside {
-            background: rgba(10, 20, 40, 0.85);
-            padding: 24px;
-            backdrop-filter: blur(12px);
-            box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
-        }
-        main {
+
+        .radar-shell {
             position: relative;
-            overflow: hidden;
+            display: grid;
+            grid-template-columns: minmax(320px, 400px) 1fr;
+            gap: 0;
+            min-height: 100vh;
         }
-        canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        h1 {
-            font-weight: 600;
-            margin: 0 0 16px;
-        }
-        section {
-            margin-bottom: 24px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #6da6ff;
-        }
-        select, input[type=range] {
-            width: 100%;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: none;
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-        }
-        .warning-banner {
-            position: absolute;
-            top: 24px;
-            left: 24px;
-            padding: 12px 18px;
-            background: linear-gradient(135deg, #ff512f, #dd2476);
-            border-radius: 10px;
-            box-shadow: 0 12px 30px rgba(221, 36, 118, 0.35);
-            font-weight: 600;
-        }
-        .warning-counter {
-            position: absolute;
-            right: 24px;
-            bottom: 24px;
-            padding: 16px 20px;
-            background: rgba(0, 0, 0, 0.55);
-            border-radius: 14px;
+
+        .control-panel {
+            position: relative;
+            padding: 28px 32px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--panel-border);
+            backdrop-filter: blur(18px);
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            min-width: 220px;
+            gap: 26px;
+            z-index: 10;
         }
-        .warning-counter span {
+
+        .panel-header h1 {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .panel-header span {
+            font-size: 0.8rem;
+            color: var(--muted);
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+        }
+
+        .control-group {
             display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
+            flex-direction: column;
+            gap: 10px;
         }
-        .legend {
+
+        .control-group label {
+            font-size: 0.75rem;
+            letter-spacing: 0.14em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .control-group select,
+        .control-group input[type="range"] {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .warning-feed {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             gap: 12px;
         }
-        .legend-item {
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            padding: 12px;
+
+        .warning-card {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
-        .legend-item h2 {
-            margin: 0 0 10px;
+
+        .warning-card strong {
+            display: block;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        canvas#radar-canvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+            background: radial-gradient(circle at center, rgba(12, 20, 36, 0.9), rgba(2, 4, 9, 0.95));
+            image-rendering: pixelated;
+        }
+
+        .stage {
+            position: relative;
+        }
+
+        .top-banner {
+            position: absolute;
+            top: 32px;
+            left: 32px;
+            padding: 16px 22px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.92), rgba(255, 159, 67, 0.85));
+            box-shadow: 0 18px 36px rgba(255, 107, 107, 0.35);
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .timestamp-chip {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            background: rgba(8, 16, 32, 0.85);
+            border: 1px solid rgba(120, 140, 255, 0.28);
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+        }
+
+        .warning-stack {
+            position: absolute;
+            right: 32px;
+            bottom: 32px;
+            display: grid;
+            gap: 12px;
+            width: 260px;
+        }
+
+        .warning-pill {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: rgba(5, 10, 24, 0.82);
+            border: 1px solid rgba(125, 155, 255, 0.22);
             font-size: 0.9rem;
         }
-        .legend-item canvas {
-            height: 48px;
+
+        .warning-pill span:first-child {
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .warning-pill span:last-child {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .loop-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .loop-controls button {
+            flex: 1 1 auto;
+            padding: 10px 0;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .loop-controls button:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        @media (max-width: 1024px) {
+            .radar-shell {
+                grid-template-columns: 1fr;
+            }
+
+            .control-panel {
+                position: absolute;
+                inset: auto 0 0 0;
+                flex-direction: row;
+                overflow-x: auto;
+                gap: 22px;
+                padding: 20px 24px;
+                border-right: none;
+                border-top: 1px solid var(--panel-border);
+            }
+
+            .panel-header {
+                min-width: 200px;
+            }
+
+            canvas#radar-canvas {
+                height: 70vh;
+            }
         }
     </style>
 </head>
 <body>
-<div id="app">
-    <aside>
-        <h1>{{ title }}</h1>
-        <section>
+<div class="radar-shell">
+    <aside class="control-panel">
+        <div class="panel-header">
+            <span>Next generation radar</span>
+            <h1>{{ title }}</h1>
+        </div>
+        <div class="control-group">
             <label for="product">Radar Product</label>
             <select id="product">
                 {% for key, label in products.items() %}
                 <option value="{{ key }}" {% if key == selected_product %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
-        </section>
-        <section>
-            <label for="tilt">Tilt (°)</label>
+        </div>
+        <div class="control-group">
+            <label for="tilt">Tilt</label>
             <select id="tilt">
                 {% for tilt in tilts %}
-                <option value="{{ tilt }}">{{ '%.2f'|format(tilt) }}</option>
+                <option value="{{ '%.2f'|format(tilt) }}">{{ '%.2f°'|format(tilt) }}</option>
                 {% endfor %}
             </select>
-        </section>
-        <section>
-            <label for="range">Range (nmi)</label>
+        </div>
+        <div class="control-group">
+            <label for="range">Range</label>
             <select id="range">
                 {% for rng in ranges %}
-                <option value="{{ rng }}">{{ rng }}</option>
+                <option value="{{ rng }}">{{ rng }} nmi</option>
                 {% endfor %}
             </select>
-        </section>
-        <section>
-            <label for="smoothing">Smoothing</label>
-            <input id="smoothing" type="range" min="0" max="1" step="0.05" value="0.4" />
-        </section>
-        <section>
-            <label>Warnings</label>
-            <div class="legend">
-                {% for warning, count in warnings_count.items() %}
-                <div class="legend-item">
-                    <h2>{{ warning }}</h2>
-                    <p>{{ count }} active</p>
-                </div>
-                {% endfor %}
-                {% if warnings_count|length == 0 %}
-                <p>No active warnings.</p>
-                {% endif %}
-            </div>
-        </section>
-    </aside>
-    <main>
-        <canvas id="radar-canvas"></canvas>
-        <div class="warning-banner" id="warning-banner">{{ overlay.highest_warning or 'No Warnings' }}</div>
-        <div class="warning-counter" id="warning-counter">
+        </div>
+        <div class="control-group">
+            <label for="smoothing">Gaussian smoothing</label>
+            <input type="range" id="smoothing" min="0" max="1" step="0.05" value="0.45" />
+        </div>
+        <div class="loop-controls">
+            <button id="play">Play Loop</button>
+            <button id="step">Step</button>
+        </div>
+        <div class="warning-feed" id="warning-feed">
             {% for warning, count in warnings_count.items() %}
-            <span><strong>{{ warning }}</strong><em>{{ count }}</em></span>
+            <div class="warning-card">
+                <strong>{{ warning }}</strong>
+                <span>{{ count }} active alerts</span>
+            </div>
+            {% endfor %}
+            {% if warnings_count|length == 0 %}
+            <div class="warning-card">
+                <strong>Quiet</strong>
+                <span>No active warnings</span>
+            </div>
+            {% endif %}
+        </div>
+    </aside>
+    <main class="stage">
+        <canvas id="radar-canvas"></canvas>
+        <div class="top-banner" id="highest-warning">{{ overlay.highest_warning or 'No active warnings' }}</div>
+        <div class="timestamp-chip" id="timestamp">Awaiting data…</div>
+        <div class="warning-stack" id="warning-stack">
+            {% for warning, count in warnings_count.items() %}
+            <div class="warning-pill">
+                <span>{{ warning }}</span>
+                <span>{{ count }}</span>
+            </div>
             {% endfor %}
         </div>
     </main>
 </div>
+
 <script>
-const warnings = {{ warnings_json | safe }};
-const banner = document.getElementById('warning-banner');
-if (!banner.textContent.trim()) {
-    banner.style.display = 'none';
-}
-const counter = document.getElementById('warning-counter');
-if (Object.keys(warnings).length === 0) {
-    counter.style.display = 'none';
-}
-const canvas = document.getElementById('radar-canvas');
-const gl = canvas.getContext('webgl2');
-function resize() {
-    canvas.width = canvas.clientWidth * window.devicePixelRatio;
-    canvas.height = canvas.clientHeight * window.devicePixelRatio;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-}
-window.addEventListener('resize', resize);
-resize();
+    const canvas = document.getElementById('radar-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
 
-const vertexSrc = `#version 300 es
-precision highp float;
-layout(location = 0) in vec2 position;
-layout(location = 1) in vec2 uv;
-out vec2 v_uv;
-void main() {
-    v_uv = uv;
-    gl_Position = vec4(position, 0.0, 1.0);
-}`;
-
-const fragmentSrc = `#version 300 es
-precision highp float;
-in vec2 v_uv;
-out vec4 fragColor;
-uniform sampler2D u_texture;
-void main() {
-    fragColor = texture(u_texture, v_uv);
-}`;
-
-function compileShader(type, source) {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(gl.getShaderInfoLog(shader));
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.clientWidth * dpr;
+        canvas.height = canvas.clientHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = false;
     }
-    return shader;
-}
 
-const program = gl.createProgram();
-gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vertexSrc));
-gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fragmentSrc));
-gl.linkProgram(program);
-if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(program));
-}
-gl.useProgram(program);
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-const quad = new Float32Array([
-    -1, -1, 0, 0,
-     1, -1, 1, 0,
-    -1,  1, 0, 1,
-     1,  1, 1, 1,
-]);
-const vao = gl.createVertexArray();
-gl.bindVertexArray(vao);
-const buffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
-gl.enableVertexAttribArray(0);
-gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
-gl.enableVertexAttribArray(1);
-gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+    let currentProduct = document.getElementById('product').value;
 
-const texture = gl.createTexture();
-gl.bindTexture(gl.TEXTURE_2D, texture);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-function updateTexture(imageData) {
-    const width = imageData.width;
-    const height = imageData.height;
-    const data = new Uint8Array(imageData.data);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-}
-
-(async function fetchLoop() {
-    while (true) {
-        const response = await fetch('/frames/{{ selected_product }}?limit=1');
-        if (response.ok) {
-            const [frame] = await response.json();
-            const res = await fetch(`/textures/${frame.product}`);
-            if (res.ok) {
-                const blob = await res.blob();
-                const bitmap = await createImageBitmap(blob);
-                const offscreen = new OffscreenCanvas(bitmap.width, bitmap.height);
-                const ctx = offscreen.getContext('2d');
-                ctx.drawImage(bitmap, 0, 0);
-                const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-                updateTexture(imageData);
+    async function fetchTexture(product) {
+        try {
+            const response = await fetch(`/textures/${product}?_=${Date.now()}`);
+            if (!response.ok) {
+                return;
             }
+            const blob = await response.blob();
+            const bitmap = await createImageBitmap(blob);
+            const scale = Math.min(canvas.width / bitmap.width, canvas.height / bitmap.height);
+            const drawWidth = bitmap.width * scale;
+            const drawHeight = bitmap.height * scale;
+            const offsetX = (canvas.width - drawWidth) / 2;
+            const offsetY = (canvas.height - drawHeight) / 2;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(bitmap, offsetX, offsetY, drawWidth, drawHeight);
+            document.getElementById('timestamp').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+        } catch (error) {
+            console.warn('Texture fetch failed', error);
         }
-        await new Promise(r => setTimeout(r, 1000));
     }
-})();
+
+    async function refreshWarnings() {
+        try {
+            const response = await fetch('/warnings');
+            if (!response.ok) {
+                return;
+            }
+            const data = await response.json();
+            const banner = document.getElementById('highest-warning');
+            banner.textContent = data.highest || 'No active warnings';
+            const stack = document.getElementById('warning-stack');
+            stack.innerHTML = '';
+            const feed = document.getElementById('warning-feed');
+            feed.innerHTML = '';
+            const entries = Object.entries(data.counts);
+            if (entries.length === 0) {
+                const card = document.createElement('div');
+                card.className = 'warning-card';
+                card.innerHTML = '<strong>Quiet</strong><span>No active warnings</span>';
+                feed.appendChild(card);
+                return;
+            }
+            for (const [type, count] of entries) {
+                const pill = document.createElement('div');
+                pill.className = 'warning-pill';
+                pill.innerHTML = `<span>${type}</span><span>${count}</span>`;
+                stack.appendChild(pill);
+                const card = document.createElement('div');
+                card.className = 'warning-card';
+                card.innerHTML = `<strong>${type}</strong><span>${count} active alerts</span>`;
+                feed.appendChild(card);
+            }
+        } catch (error) {
+            console.warn('Warning refresh failed', error);
+        }
+    }
+
+    document.getElementById('product').addEventListener('change', (event) => {
+        currentProduct = event.target.value;
+        fetchTexture(currentProduct);
+    });
+
+    document.getElementById('step').addEventListener('click', () => fetchTexture(currentProduct));
+
+    let loopHandle = null;
+    document.getElementById('play').addEventListener('click', () => {
+        if (loopHandle) {
+            clearInterval(loopHandle);
+            loopHandle = null;
+            return;
+        }
+        loopHandle = setInterval(() => fetchTexture(currentProduct), 2000);
+    });
+
+    fetchTexture(currentProduct);
+    refreshWarnings();
+    setInterval(refreshWarnings, 120000);
 </script>
 </body>
 </html>

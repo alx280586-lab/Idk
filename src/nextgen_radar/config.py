@@ -25,10 +25,13 @@ class DataSourceConfig:
     """Defines a remote or local data source providing radar volumes."""
 
     identifier: str
-    url: str
+    url: str = ""
     auth_token: Optional[str] = None
     request_interval: float = 90.0
     products: Sequence[str] = field(default_factory=list)
+    kind: str = "http"
+    station: Optional[str] = None
+    archive_days: int = 2
 
 
 @dataclass(slots=True)
@@ -64,6 +67,7 @@ class RadarConfig:
             "cities",
         )
     )
+    warning_refresh_interval: float = 120.0
 
     def product_list(self) -> List[ProductConfig]:
         return [self.products[key] for key in sorted(self.products)]

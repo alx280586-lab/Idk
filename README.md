@@ -4,14 +4,14 @@ An ultra-advanced interactive weather radar system inspired by [supercell-wx](ht
 
 ## Features
 
-- **Data ingestion** for live HTTP streams and historical archives
+- **Automated Level-II ingestion** directly from NOAA's AWS bucket with zero manual decoding
 - **Radar decoding** for reflectivity, velocity, correlation coefficient, spectrum width, ZDR, KDP, and more
 - **Derived fields** including storm-relative motion, composite reflectivity, VIL, and hail probability
 - **Advanced smoothing** with configurable multi-scale Gaussian convolution and adaptive blending
 - **Storm analysis** covering mesocyclone detection, hook echo recognition, and hail core estimation
 - **OpenGL/WebGL rendering** with customizable color tables, frame caching, and time-loop playback
 - **Geospatial overlays** for states, counties, roads, rivers, and cities with CRS transformation
-- **Professional UI** leveraging a templated dashboard featuring real-time warning banners and counters
+- **Professional UI** inspired by supercell-wx with pixel-perfect radar textures, looping controls, and live warning banners
 - **FastAPI service** exposing live products, frame history, overlays, and texture streaming endpoints
 - **Modular architecture** suitable for desktop or web deployment with an extensible API surface
 
@@ -21,35 +21,31 @@ An ultra-advanced interactive weather radar system inspired by [supercell-wx](ht
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[development]
-uvicorn nextgen_radar.server.api:create_app --reload
+python scripts/run_nextgen.py --station KTLX
 ```
 
-Open `http://127.0.0.1:8000` and serve the `templates/dashboard.html` with your preferred static file host or integrate with a modern frontend framework.
+Open `http://127.0.0.1:8000` after the server starts. The API streams live textures to the dashboard located at `templates/dashboard.html`. Serve the HTML with any static host (or load directly with Live Server) and it will automatically pull the latest frames, warnings, and overlay metadata from the running FastAPI app.
 
-### Decoding Level-II radar with ToolsUI (Easy Mode)
+> **Note:** The install step brings in [ARM Py-ART](https://arm-doe.github.io/pyart/) so Level-II volumes are decoded automatically—no external tools required.
 
-NEXRAD Level-II archives use proprietary BZip2 blocks that cannot be decompressed with standard utilities. The easiest way to prepare data for this project is to use **Unidata's NetCDF-Java ToolsUI** application, which bundles the official Level-II decoder.
+### Configure live ingest
 
-1. Download `toolsUI-<version>.jar` from the [NetCDF-Java release page](https://downloads.unidata.ucar.edu/netcdf-java/latest/).
-2. Launch the converter directly from the command line:
+The helper script handles everything from downloading the most recent Level-II scans to decoding them with Py-ART:
 
-   ```bash
-   java -jar toolsUI-<version>.jar UI
-   ```
+```bash
+python scripts/run_nextgen.py --station KFDR --storage ./radar-cache --interval 60
+```
 
-3. In the ToolsUI window choose **Feature Types → Radar Level II to NetCDF**.
-4. Select your raw Level-II (`*.gz` or `*.ar2v`) file as the input and choose an output location ending in `.nc`.
-5. Press **Convert**. The resulting NetCDF file is immediately compatible with xarray and the rest of the NextGen Radar processing pipeline.
+- `--station` sets the four-letter NEXRAD site.
+- `--storage` determines where Level-II files are cached (they're automatically decompressed and reused).
+- `--interval` controls how often the AWS feed is polled for new volumes.
+- `--archive-days` sets how far back in the archive to search when booting.
 
-Tips:
+The ingest manager automatically converts each volume into reflectivity, velocity, dual-pol, and derived fields, then pushes pixel-perfect textures to the WebGL renderer.
 
-- ToolsUI runs anywhere Java is available (Windows, macOS, Linux) and requires no additional Python setup.
-- Store converted volumes in a directory referenced by `FileRadarSource` to enable historical playback.
-- For batch conversions you can supply multiple files to the **Radar Level II to NetCDF** tool; ToolsUI queues them automatically.
+### Bring your own archives (optional)
 
-### Integrating converted data
-
-Once a Level-II file has been converted, copy it into a directory such as `data/decoded/`. Update your configuration to point a `FileRadarSource` at that directory. The built-in decoder will ingest the NetCDF payload and expose all supported tilts and derived products.
+Already have decoded NetCDF archives? Point a `FileRadarSource` at the directory and the decoder will ingest them alongside the live feed. Mixed workflows are supported so you can blend historical playback with the streaming radar tiles.
 
 ### Live NWS warnings and polygons
 

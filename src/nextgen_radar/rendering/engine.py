@@ -50,10 +50,7 @@ class RadarRenderingEngine:
 
     def _colorize(self, normalized: np.ndarray, product: str) -> np.ndarray:
         table = self.colormaps.get(product.lower(), DEFAULT_TABLES["reflectivity"])
-        rgba = np.zeros((*normalized.shape, 4), dtype=np.uint8)
-        for index, value in np.ndenumerate(normalized):
-            rgba[index] = table.sample(float(value))
-        return rgba
+        return table.map_array(normalized)
 
     def render_volume(
         self,
@@ -63,7 +60,7 @@ class RadarRenderingEngine:
     ) -> np.ndarray:
         normalized = self._normalize(volume, value_range)
         colorized = self._colorize(normalized, product)
-        texture = np.flipud(colorized)
+        texture = np.flipud(colorized).copy()
         self._cache_frame(product, texture)
         self.latest_texture[product] = texture
         return texture

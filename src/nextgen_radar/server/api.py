@@ -5,6 +5,7 @@ from __future__ import annotations
 
 
 import asyncio
+import logging
 from collections import Counter
 from io import BytesIO
 from pathlib import Path
@@ -14,10 +15,11 @@ import aiohttp
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import ORJSONResponse, Response
 from PIL import Image
+import xarray as xr
 
 from ..config import DataSourceConfig, ProductConfig, RadarConfig
 from ..data.decoder import RadarDecoder, RadarVolume
-from ..data.sources import HttpRadarSource, RadarFrame
+from ..data.sources import BaseRadarSource, HttpRadarSource, NexradAwsSource, RadarFrame
 from ..data.warnings import fetch_active_warnings
 from ..processing.analysis import StormSummary, summarize_storms
 from ..processing.smoothing import multiscale_gaussian_smoothing
@@ -33,27 +35,47 @@ class RadarRegistry:
         self.decoder = RadarDecoder()
         self.rendering = RadarRenderingEngine(config.rendering)
         self.products: Dict[str, ProductConfig] = config.products
-        self.sources = [HttpRadarSource(source) for source in config.data_sources]
+        self.sources = self._build_sources(config)
         self.history: Dict[str, List[RadarVolume]] = {}
         self.summary: Optional[StormSummary] = None
         self._lock = asyncio.Lock()
         self._http_session: Optional[aiohttp.ClientSession] = None
+        self._tasks: List[asyncio.Task] = []
+        self._warning_task: Optional[asyncio.Task] = None
+        self.logger = logging.getLogger(__name__)
 
-    async def ingest_frame(self, frame: RadarFrame) -> RadarVolume:
-        volume = self.decoder.decode(frame)
-        product_list = self.history.setdefault(volume.product, [])
-        product_list.append(volume)
-        if len(product_list) > self.config.rendering.frame_cache_size:
-            del product_list[0]
-        smoothed = multiscale_gaussian_smoothing(volume.sweep)
-        derived = derived_products({volume.product: smoothed})
+    def _build_sources(self, config: RadarConfig) -> List[BaseRadarSource]:
+        sources = []
+        for source_config in config.data_sources:
+            if source_config.kind == "nexrad-aws":
+                storage = config.storage_dir / (source_config.identifier or source_config.station or "nexrad")
+                sources.append(NexradAwsSource(source_config, storage))
+            else:
+                sources.append(HttpRadarSource(source_config))
+        return sources
+
+    async def ingest_frame(self, frame: RadarFrame) -> List[RadarVolume]:
+        volumes = self.decoder.decode(frame)
+        field_payloads: Dict[str, xr.DataArray] = {}
+        for volume in volumes:
+            history = self.history.setdefault(volume.product, [])
+            history.append(volume)
+            if len(history) > self.config.rendering.frame_cache_size:
+                del history[0]
+            smoothed = multiscale_gaussian_smoothing(volume.sweep)
+            self.rendering.render_volume(volume.product, smoothed)
+            base_key = volume.product.split("_")[0]
+            if base_key not in field_payloads or volume.product == base_key:
+                field_payloads[base_key] = smoothed
+            if volume.product != base_key:
+                field_payloads[volume.product] = smoothed
+        derived = derived_products(field_payloads)
         for key, data in derived.items():
             self.rendering.render_volume(key, data)
-        texture = self.rendering.render_volume(volume.product, smoothed)
-        _ = texture  # placeholder for GPU upload
+            field_payloads[key] = data
         warnings = self.summary.warnings if self.summary else []
-        self.rendering.update_overlay(summarize_storms({volume.product: smoothed}, warnings))
-        return volume
+        self.rendering.update_overlay(summarize_storms(field_payloads, warnings))
+        return volumes
 
     async def update_summary(self, summary: StormSummary) -> None:
         async with self._lock:
@@ -89,7 +111,40 @@ class RadarRegistry:
         await self.update_summary(summary)
         return summary
 
+    async def start(self) -> None:
+        if self._tasks:
+            return
+        for source in self.sources:
+            self._tasks.append(asyncio.create_task(self._pump_source(source)))
+        self._warning_task = asyncio.create_task(self._refresh_warnings())
+
+    async def _pump_source(self, source: BaseRadarSource) -> None:
+        try:
+            async for frame in source.frames():
+                try:
+                    await self.ingest_frame(frame)
+                except Exception as exc:  # pragma: no cover - runtime safety
+                    self.logger.exception("Failed to ingest frame from %s: %s", source.config.identifier, exc)
+        finally:
+            await source.close()
+
+    async def _refresh_warnings(self) -> None:
+        while True:
+            try:
+                await self.fetch_warnings(limit=50)
+            except Exception as exc:  # pragma: no cover - network safety
+                self.logger.warning("Warning refresh failed: %s", exc)
+            await asyncio.sleep(self.config.warning_refresh_interval)
+
     async def close(self) -> None:
+        for task in self._tasks:
+            task.cancel()
+        if self._warning_task is not None:
+            self._warning_task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+        if self._warning_task is not None:
+            await asyncio.gather(self._warning_task, return_exceptions=True)
         for source in self.sources:
             if hasattr(source, "close"):
                 await source.close()  # type: ignore[func-returns-value]
@@ -107,9 +162,11 @@ def default_config() -> RadarConfig:
     products = {key: ProductConfig(product_id=key, display_name=prod.display_name, default_colormap=prod.colormap) for key, prod in build_default_products().items()}
     sources = [
         DataSourceConfig(
-            identifier="nexrad",
-            url="https://example.com/radar",
+            identifier="aws",
+            kind="nexrad-aws",
+            station="KTLX",
             products=list(products.keys()),
+            request_interval=90.0,
         )
     ]
     return RadarConfig(storage_dir=storage, data_sources=sources, products=products)
@@ -118,6 +175,10 @@ def default_config() -> RadarConfig:
 def create_app(config: Optional[RadarConfig] = None) -> FastAPI:
     app = FastAPI(default_response_class=ORJSONResponse)
     app.state.registry = RadarRegistry(config or default_config())
+
+    @app.on_event("startup")
+    async def _startup() -> None:
+        await app.state.registry.start()
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:

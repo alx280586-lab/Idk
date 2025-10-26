@@ -13,6 +13,8 @@ class ColorTable:
     def __init__(self, name: str, stops: List[Tuple[float, Tuple[int, int, int, int]]]) -> None:
         self.name = name
         self.stops = sorted(stops, key=lambda stop: stop[0])
+        self._stop_values = np.array([stop for stop, _ in self.stops], dtype=np.float32)
+        self._color_values = np.array([color for _, color in self.stops], dtype=np.float32)
 
     def sample(self, value: float) -> Tuple[int, int, int, int]:
         value = np.clip(value, 0.0, 1.0)
@@ -24,6 +26,17 @@ class ColorTable:
                 t = (value - prev_stop) / (stop - prev_stop + 1e-6)
                 return tuple(int(prev_color[i] + t * (color[i] - prev_color[i])) for i in range(4))
         return self.stops[-1][1]
+
+    def map_array(self, values: np.ndarray) -> np.ndarray:
+        """Vectorized mapping for large radar grids."""
+
+        clipped = np.clip(values, 0.0, 1.0)
+        flat = clipped.reshape(-1)
+        mapped = np.stack(
+            [np.interp(flat, self._stop_values, self._color_values[:, channel]) for channel in range(4)],
+            axis=-1,
+        )
+        return mapped.reshape((*clipped.shape, 4)).astype(np.uint8)
 
 
 DEFAULT_TABLES: Dict[str, ColorTable] = {
