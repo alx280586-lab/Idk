@@ -125,6 +125,8 @@
   </div>
   <script id="bootstrap-script">
     (function () {
+      const INSIGHTS_WHITELIST = ["localhost", "127.0.0.1"];
+
       function renderBlockingMessage(id, html) {
         const warning = document.createElement("div");
         warning.id = id;
@@ -133,11 +135,24 @@
         document.documentElement.classList.add("no-bootstrap");
       }
 
+      function injectScript(options) {
+        const script = document.createElement("script");
+        if (options.type) script.type = options.type;
+        if (options.src) script.src = options.src;
+        if (options.text) script.textContent = options.text;
+        script.defer = false;
+        document.currentScript.after(script);
+        return script;
+      }
+
       if (window.location.protocol === "file:") {
-        renderBlockingMessage(
-          "file-protocol-warning",
-          "<h2>Local file access detected</h2><p>The simulator needs to be served over HTTP in order to load its modules. Start a local web server (for example with <code>npx serve</code> or <code>python -m http.server</code>) and open <code>http://localhost:PORT/index.html</code>.</p>"
-        );
+        const offline = injectScript({ src: "dist/offline-bundle.js" });
+        offline.addEventListener("error", () => {
+          renderBlockingMessage(
+            "file-protocol-warning",
+            "<h2>Offline bundle missing</h2><p>The standalone bundle <code>dist/offline-bundle.js</code> could not be loaded. Verify the download contains the <code>dist</code> folder or use a simple web server such as <code>python -m http.server</code>.</p>"
+          );
+        });
         return;
       }
 
@@ -159,8 +174,7 @@
         : [];
 
       const allowedHosts = new Set([
-        "localhost",
-        "127.0.0.1",
+        ...INSIGHTS_WHITELIST,
         "0.0.0.0",
         "[::1]",
         ...configuredHosts,
@@ -200,10 +214,7 @@
         return;
       }
 
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = "src/main.js";
-      bootstrap.after(script);
+      injectScript({ type: "module", src: "src/main.js" });
     })();
   </script>
 </body>

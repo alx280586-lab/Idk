@@ -34,7 +34,17 @@ Whether you are a meteorology student, severe weather enthusiast, or graphics en
 
 ## Launching the simulator locally
 
-Modern browsers block ES module scripts from loading when a page is opened directly from the file system (e.g., `file:///.../index.html`). To run the simulator you must serve the project over HTTP. Any simple static file server will work; the examples below rely on tooling that ships with common developer environments.
+You now have two ways to run the simulator: open the bundled offline build directly from disk, or serve the ES module sources over HTTP for iterative development.
+
+### Option A — Open the offline bundle
+
+1. Download or clone the repository and ensure the `dist/offline-bundle.js` file sits next to `index.html`.
+2. Double-click `index.html` (or drag it into a browser window). The inline bootstrapper detects the `file://` protocol and loads the offline bundle automatically.
+3. If you see an “Offline bundle missing” warning, verify the `dist` directory shipped with the download. You can regenerate the bundle manually with `python3 scripts/build_offline_bundle.py` after pulling new changes.
+
+### Option B — Serve over HTTP (recommended for development)
+
+Modern browsers enforce CORS checks for module scripts loaded from the local file system, so the development workflow still benefits from a tiny static web server.
 
 1. From the repository root, start a local server:
    - **Python 3:** `python3 -m http.server 8080`
@@ -45,9 +55,13 @@ Modern browsers block ES module scripts from loading when a page is opened direc
 
 If you need to host the simulator elsewhere, deploy the contents of this repository to any static hosting provider. No backend components are required.
 
+### Rebuilding the offline bundle
+
+Whenever you update files under `src/`, rerun `python3 scripts/build_offline_bundle.py` to refresh `dist/offline-bundle.js`. The script performs a lightweight transformation that converts the ES modules into a single browser-friendly script, ensuring the offline experience stays in sync with the source modules.
+
 ### Allowing custom hostnames
 
-The frontend validates `window.location.hostname` before loading the WebGL runtime. Common local development hosts—`localhost`, `127.0.0.1`, `0.0.0.0`, and `[::1]`—are permitted automatically. To run behind a different proxy or vanity domain, expose an allow list before the inline bootstrap script executes:
+The frontend validates `window.location.hostname` against `INSIGHTS_WHITELIST` before loading the WebGL runtime. Common local development hosts—`localhost`, `127.0.0.1`, `0.0.0.0`, and `[::1]`—are permitted automatically. To run behind a different proxy or vanity domain, expose an allow list before the inline bootstrap script executes:
 
 ```html
 <script>
