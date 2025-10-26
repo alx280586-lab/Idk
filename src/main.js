@@ -5,8 +5,7 @@ import { Alerts } from "./alerts.js";
 import { Analyst } from "./analyst.js";
 import { UI } from "./ui.js";
 
-const MINUTE_PER_SECOND = 600;
-const SIM_MINUTE_MS = 100;
+const DEFAULT_SIM_MINUTE_MS = 100;
 
 const state = {
   atmo: Atmosphere.create(Date.now() & 0xffffffff),
@@ -36,7 +35,9 @@ const state = {
     running: true,
     playback: 1,
     manual: false,
-    targetMinute: 0
+    targetMinute: 0,
+    msPerMinute: DEFAULT_SIM_MINUTE_MS,
+    dayLengthMinutes: (DEFAULT_SIM_MINUTE_MS * 1440) / 60000
   },
   overlayCtx: null,
   warningsCtx: null,
@@ -51,6 +52,7 @@ const state = {
 };
 
 async function init() {
+  const config = await collectInitialConfig();
   const canvas = document.getElementById("radar-canvas");
   state.renderer = Renderer.create(canvas);
   state.overlayCtx = document.getElementById("overlay-canvas").getContext("2d");
@@ -69,9 +71,94 @@ async function init() {
 
   state.timelineSlider = document.getElementById("time-slider");
   state.resetEnvironment = resetEnvironment;
+  applySimulationConfig(config);
+  await applyInitialFastForward(config.fastForwardDays);
   UI.setup(state);
   hideLoading();
   requestAnimationFrame(loop);
+}
+
+function applySimulationConfig(config) {
+  const { dayLengthMinutes } = config;
+  const fallback = state.clock.dayLengthMinutes;
+  const minutes = Math.max(0.25, Number.isFinite(dayLengthMinutes) ? dayLengthMinutes : fallback);
+  const msPerMinute = (minutes * 60000) / 1440;
+  state.clock.msPerMinute = msPerMinute;
+  state.clock.dayLengthMinutes = minutes;
+  state.clock.timeMinutes = state.atmo.timeMinutes;
+  state.timelineSlider.min = 0;
+  state.timelineSlider.max = 1440;
+  state.timelineSlider.value = state.clock.timeMinutes;
+  accumulator = 0;
+  lastTimestamp = 0;
+}
+
+async function collectInitialConfig() {
+  const form = document.getElementById("session-config-form");
+  if (!form) {
+    return { dayLengthMinutes: state.clock.dayLengthMinutes, fastForwardDays: 0 };
+  }
+  const submitButton = form.querySelector("button[type=submit]");
+  const dayLengthInput = document.getElementById("day-length-input");
+  const fastForwardInput = document.getElementById("fast-forward-input");
+  const message = document.getElementById("loading-message");
+  return new Promise((resolve) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const dayLengthMinutes = parseFloat(dayLengthInput.value);
+      const fastForwardDays = parseFloat(fastForwardInput.value);
+      submitButton.disabled = true;
+      submitButton.textContent = "Preparing…";
+      if (message) {
+        message.textContent = "Configuring simulation";
+      }
+      resolve({
+        dayLengthMinutes: Number.isFinite(dayLengthMinutes)
+          ? dayLengthMinutes
+          : state.clock.dayLengthMinutes,
+        fastForwardDays: Math.max(0, Number.isFinite(fastForwardDays) ? fastForwardDays : 0)
+      });
+    }, { once: true });
+  });
+}
+
+async function applyInitialFastForward(days) {
+  const totalMinutes = Math.max(0, Math.floor((Number.isFinite(days) ? days : 0) * 1440));
+  if (totalMinutes === 0) {
+    Radar.generate(state.radarCurrent, state.atmo, state.options);
+    Radar.generate(state.radarNext, state.atmo, state.options);
+    state.clock.timeMinutes = state.atmo.timeMinutes;
+    state.timelineSlider.value = state.clock.timeMinutes;
+    return;
+  }
+  const message = document.getElementById("loading-message");
+  const progress = document.querySelector("#loading-screen .progress");
+  if (progress) {
+    progress.style.animation = "none";
+    progress.style.transform = "scaleX(0)";
+  }
+  let advanced = 0;
+  while (advanced < totalMinutes) {
+    const step = Math.min(10, totalMinutes - advanced);
+    Atmosphere.update(state.atmo, step, state.options);
+    advanced += step;
+    if (progress) {
+      const pct = advanced / totalMinutes;
+      progress.style.transform = `scaleX(${pct.toFixed(3)})`;
+    }
+    if (message) {
+      message.textContent = `Fast-forwarding ${days.toFixed(1)} day${days === 1 ? "" : "s"}… ${Math.round(
+        (advanced / totalMinutes) * 100
+      )}%`;
+    }
+    if (advanced < totalMinutes) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  Radar.generate(state.radarCurrent, state.atmo, state.options);
+  Radar.generate(state.radarNext, state.atmo, state.options);
+  state.clock.timeMinutes = state.atmo.timeMinutes;
+  state.timelineSlider.value = state.clock.timeMinutes;
 }
 
 function hideLoading() {
@@ -88,7 +175,7 @@ function loop(timestamp) {
   lastTimestamp = timestamp;
   accumulator += delta;
 
-  const minuteStep = state.clock.playback * (delta / SIM_MINUTE_MS);
+  const minuteStep = state.clock.playback * (delta / state.clock.msPerMinute);
   if (state.clock.manual) {
     state.atmo.timeMinutes = state.clock.targetMinute;
     state.clock.timeMinutes = state.clock.targetMinute;
@@ -98,12 +185,12 @@ function loop(timestamp) {
     state.atmo.timeMinutes = state.clock.timeMinutes;
   }
 
-  while (accumulator >= SIM_MINUTE_MS) {
-    const dtMinutes = state.clock.playback * (SIM_MINUTE_MS / SIM_MINUTE_MS);
+  while (accumulator >= state.clock.msPerMinute) {
+    const dtMinutes = state.clock.playback;
     Atmosphere.update(state.atmo, dtMinutes, state.options);
     Radar.generate(state.radarNext, state.atmo, state.options);
     Radar.blend(state.radarCurrent, state.radarNext, 0.25);
-    accumulator -= SIM_MINUTE_MS;
+    accumulator -= state.clock.msPerMinute;
   }
 
   const productField = state.radarCurrent[state.renderer.currentProduct];

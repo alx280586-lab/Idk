@@ -107,7 +107,19 @@
   <div id="loading-screen" class="visible">
     <div class="loading-content">
       <div class="radar-sweep"></div>
-      <p>Initializing Atmosphere – Generating Synthetic CAPE Fields</p>
+      <div class="setup-card">
+        <h2>Simulation Setup</h2>
+        <p id="loading-message">Choose how long your virtual day lasts and optionally begin after a time jump.</p>
+        <form id="session-config-form">
+          <label for="day-length-input">Day length (real minutes per simulated day)
+            <input id="day-length-input" type="number" min="0.25" step="0.1" value="2.4" required />
+          </label>
+          <label for="fast-forward-input">Fast-forward days before starting
+            <input id="fast-forward-input" type="number" min="0" step="0.5" value="0" />
+          </label>
+          <button type="submit">Start Simulation</button>
+        </form>
+      </div>
       <div class="loading-bar"><div class="progress"></div></div>
     </div>
   </div>
