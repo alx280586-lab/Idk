@@ -31,3 +31,16 @@ Beyond its immediate visual appeal, the simulator offers a sandbox for experimen
 Future improvements could incorporate WebGPU backends, volumetric lighting, multi-radar mosaics, or real-time collaboration features. The current foundation is intentionally extensible: adding new radar products, analysis overlays, or hazard types primarily involves authoring additional shaders and decision logic while reusing existing UI patterns. Contributions are welcomed, and the modular design aims to make onboarding new developers straightforward.
 
 Whether you are a meteorology student, severe weather enthusiast, or graphics engineer, the Synthetic WebGL Radar Simulator invites you to explore a richly detailed, scientifically grounded representation of convective weather. Pause a tornadic storm to inspect its debris signature, fast-forward a tropical cyclone’s landfall, or simply let the day unfold and observe the emergent choreography of atmosphere and radar. Everything you see is simulated in-browser, yet the experience aspires to capture the awe of watching real storms evolve across the American landscape.
+
+## Launching the simulator locally
+
+Modern browsers block ES module scripts from loading when a page is opened directly from the file system (e.g., `file:///.../index.html`). To run the simulator you must serve the project over HTTP. Any simple static file server will work; the examples below rely on tooling that ships with common developer environments.
+
+1. From the repository root, start a local server:
+   - **Python 3:** `python3 -m http.server 8080`
+   - **Node.js (using npx):** `npx serve .`
+   - **Docker users:** `docker run --rm -it -v "$PWD":/srv -p 8080:8080 pierrezemb/gostatic`
+2. Open your browser to the reported address, such as `http://localhost:8080/`.
+3. When the boot splash appears, configure the simulated day length and optional fast-forwarding, then start the run.
+
+If you need to host the simulator elsewhere, deploy the contents of this repository to any static hosting provider. No backend components are required.
