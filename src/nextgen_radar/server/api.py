@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import Counter
+from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -48,8 +49,27 @@ class RadarRegistry:
         sources = []
         for source_config in config.data_sources:
             if source_config.kind == "nexrad-aws":
-                storage = config.storage_dir / (source_config.identifier or source_config.station or "nexrad")
-                sources.append(NexradAwsSource(source_config, storage))
+                stations = []
+                if source_config.station:
+                    stations.append(source_config.station)
+                stations.extend(source_config.stations)
+                if not stations:
+                    raise ValueError("NEXRAD AWS sources require at least one station code")
+                seen = set()
+                for station in stations:
+                    if not station or station.upper() in seen:
+                        continue
+                    seen.add(station.upper())
+                    identifier = source_config.identifier or "nexrad"
+                    child_identifier = f"{identifier}-{station.lower()}"
+                    child_config = replace(
+                        source_config,
+                        identifier=child_identifier,
+                        station=station.upper(),
+                        stations=[station.upper()],
+                    )
+                    storage = config.storage_dir / child_identifier
+                    sources.append(NexradAwsSource(child_config, storage))
             else:
                 sources.append(HttpRadarSource(source_config))
         return sources
@@ -165,6 +185,7 @@ def default_config() -> RadarConfig:
             identifier="aws",
             kind="nexrad-aws",
             station="KTLX",
+            stations=["KTLX"],
             products=list(products.keys()),
             request_interval=90.0,
         )

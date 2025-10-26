@@ -7,7 +7,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import xarray as xr
@@ -15,9 +15,9 @@ import xarray as xr
 from .sources import RadarFrame
 
 try:  # pragma: no cover - optional dependency
-    import pyart
+    from metpy.io import Level2File
 except Exception:  # pragma: no cover
-    pyart = None
+    Level2File = None
 
 
 @dataclass(slots=True)
@@ -195,79 +195,240 @@ class RadarDecoder:
         raise ValueError(f"No data variables found in NetCDF dataset for product {product}")
 
     def _decode_level2(self, frame: RadarFrame) -> List[RadarVolume]:
-        if pyart is None:
+        if Level2File is None:
             raise RuntimeError(
-                "arm_pyart is required to decode Level II volumes automatically. Install the optional dependency."
+                "metpy is required to decode Level II volumes automatically. Install the optional dependency."
             )
-        source = frame.path if frame.path else frame.data
-        if source is None:
-            raise ValueError("LEVEL2 frame requires a file path or binary payload")
-        radar = pyart.io.read_nexrad_archive(source)
-        station = radar.metadata.get("instrument_name", frame.station)
-        range_gates = radar.range["data"] / 1000.0
-        sweep_starts = radar.sweep_start_ray_index["data"]
-        sweep_ends = radar.sweep_end_ray_index["data"]
-        fixed_angles = radar.fixed_angle["data"]
-        base_time = frame.timestamp
-        if base_time.tzinfo is None:
-            base_time = base_time.replace(tzinfo=dt.timezone.utc)
-        if pyart is not None:
-            util_module = getattr(pyart, "util", None)
-            common_module = getattr(pyart, "common", None)
-            if util_module is not None:
-                try:
-                    base_time = util_module.datetime_from_radar(radar)  # type: ignore[attr-defined]
-                except Exception:  # pragma: no cover
-                    pass
-            if common_module is not None:
-                try:
-                    base_time = common_module.datetime_from_radar(radar)  # type: ignore[attr-defined]
-                except Exception:  # pragma: no cover
-                    pass
-
-        field_map: Dict[str, List[str]] = {
-            "REF": ["reflectivity", "dz"],
-            "VEL": ["velocity", "vr"],
-            "ZDR": ["differential_reflectivity", "zdr"],
-            "CC": ["cross_correlation_ratio", "cc"],
-            "SW": ["spectrum_width", "sw"],
-            "KDP": ["specific_differential_phase", "kdp"],
-        }
-
+        source_path: Optional[Path]
+        temp_path: Optional[Path] = None
+        if frame.path is not None:
+            source_path = frame.path
+        else:
+            if frame.data is None:
+                raise ValueError("LEVEL2 frame requires a file path or binary payload")
+            temp_fd, temp_name = tempfile.mkstemp(suffix=".ar2v")
+            os.close(temp_fd)
+            temp_path = Path(temp_name)
+            temp_path.write_bytes(frame.data)
+            source_path = temp_path
         volumes: List[RadarVolume] = []
-        for tilt_index, (start, end) in enumerate(zip(sweep_starts, sweep_ends)):
-            ray_slice = slice(int(start), int(end) + 1)
-            azimuth = radar.azimuth["data"][ray_slice]
-            sweep_seconds = float(np.nanmedian(radar.time["data"][ray_slice])) if radar.time["data"].size else 0.0
-            sweep_time = base_time + dt.timedelta(seconds=sweep_seconds)
-            for field_id, candidates in field_map.items():
-                field_name = next((name for name in candidates if name in radar.fields), None)
-                if not field_name:
-                    continue
-                data = radar.fields[field_name]["data"][ray_slice]
-                array = xr.DataArray(
-                    np.ma.filled(data, np.nan),
-                    dims=("azimuth", "range"),
-                    coords={"azimuth": azimuth, "range": range_gates},
-                    attrs={
-                        "units": radar.fields[field_name].get("units", ""),
-                        "tilt": float(fixed_angles[tilt_index]),
-                        "station": station,
-                    },
+        try:
+            with source_path.open("rb") as handle:
+                level2 = Level2File(handle)
+            station = getattr(level2, "station", None) or frame.station
+            sweep_count = len(getattr(level2, "sweeps", []))
+            base_time = frame.timestamp if frame.timestamp.tzinfo else frame.timestamp.replace(tzinfo=dt.timezone.utc)
+            for sweep_index in range(sweep_count):
+                azimuth, ranges_km, elevation = self._level2_geometry(level2, sweep_index, frame.elevation)
+                sweep_time = self._level2_timestamp(level2, sweep_index, base_time)
+                raw_moments = self._extract_moments(level2, sweep_index)
+                sweep_volumes = self._build_volumes_for_sweep(
+                    raw_moments,
+                    azimuth,
+                    ranges_km,
+                    station,
+                    elevation,
+                    sweep_time,
+                    sweep_index,
                 )
-                product_name = field_id if tilt_index == 0 else f"{field_id}_T{fixed_angles[tilt_index]:.2f}"
-                volumes.append(
-                    RadarVolume(
-                        product=product_name,
-                        timestamp=sweep_time,
-                        elevation=float(fixed_angles[tilt_index]),
-                        station=station,
-                        sweep=array,
-                        attributes={"tilt_degrees": float(fixed_angles[tilt_index])},
-                        tilt_index=tilt_index,
-                    )
-                )
+                volumes.extend(sweep_volumes)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
         return volumes
+
+    def _extract_moments(
+        self, level2: "Level2File", sweep_index: int
+    ) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        moment_aliases: Dict[str, Sequence[str]] = {
+            "REF": ("REF", "DZ", "DBZ"),
+            "VEL": ("VEL", "DV", "VR"),
+            "SW": ("SW", "SR"),
+            "ZDR": ("ZDR", "ZD"),
+            "RHO": ("RHO", "RHOHV", "CC"),
+            "KDP": ("KDP",),
+            "PHI": ("PHI", "PHIDP"),
+        }
+        extracted: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        for key, aliases in moment_aliases.items():
+            payload = self._get_level2_field(level2, sweep_index, aliases)
+            if payload is None:
+                continue
+            data, azimuth, ranges = payload
+            extracted[key] = (data, azimuth, ranges)
+        if "KDP" not in extracted and "PHI" in extracted:
+            phi_data, azimuth, ranges = extracted["PHI"]
+            kdp = self._estimate_kdp(phi_data, ranges)
+            extracted["KDP"] = (kdp, azimuth, ranges)
+        return extracted
+
+    def _build_volumes_for_sweep(
+        self,
+        raw_moments: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]],
+        azimuth: np.ndarray,
+        ranges_km: np.ndarray,
+        station: str,
+        elevation: float,
+        sweep_time: dt.datetime,
+        sweep_index: int,
+    ) -> List[RadarVolume]:
+        units_map = {
+            "REF": "dBZ",
+            "VEL": "m/s",
+            "SW": "m/s",
+            "ZDR": "dB",
+            "RHO": "ratio",
+            "KDP": "deg/km",
+        }
+        product_map = {
+            "REF": "REF",
+            "VEL": "VEL",
+            "SW": "SW",
+            "ZDR": "ZDR",
+            "RHO": "CC",
+            "KDP": "KDP",
+        }
+        volumes: List[RadarVolume] = []
+        for key, (data, data_azimuth, data_range) in raw_moments.items():
+            if key not in product_map:
+                continue
+            if data.size == 0:
+                continue
+            # Align geometry if the moment provides its own coordinates
+            az = data_azimuth if data_azimuth.size else azimuth
+            rng = data_range if data_range.size else ranges_km
+            filled = np.ma.filled(np.asarray(data, dtype=np.float32), np.nan)
+            moment = xr.DataArray(
+                filled,
+                dims=("azimuth", "range"),
+                coords={"azimuth": az, "range": rng},
+                attrs={"units": units_map.get(key, "")},
+            )
+            product_id = product_map[key]
+            product_name = product_id if sweep_index == 0 else f"{product_id}_T{elevation:.2f}"
+            volumes.append(
+                RadarVolume(
+                    product=product_name,
+                    timestamp=sweep_time,
+                    elevation=elevation,
+                    station=station,
+                    sweep=moment,
+                    attributes={"tilt_degrees": elevation},
+                    tilt_index=sweep_index,
+                )
+            )
+        return volumes
+
+    def _get_level2_field(
+        self, level2: "Level2File", sweep_index: int, aliases: Sequence[str]
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        for alias in aliases:
+            try:
+                payload = level2.get_data(sweep_index, alias)
+            except KeyError:
+                continue
+            except Exception:
+                continue
+            if payload is None:
+                continue
+            data: Optional[np.ndarray]
+            azimuth: Optional[np.ndarray]
+            ranges: Optional[np.ndarray]
+            if isinstance(payload, tuple) and len(payload) >= 3:
+                data, azimuth, ranges = payload[0], payload[1], payload[2]
+            elif isinstance(payload, dict):
+                data = payload.get("data")
+                azimuth = payload.get("azimuth") or payload.get("az")
+                ranges = payload.get("range") or payload.get("r")
+            else:
+                continue
+            if data is None or azimuth is None or ranges is None:
+                continue
+            return (np.asarray(data), np.asarray(azimuth), np.asarray(ranges))
+        return None
+
+    def _level2_geometry(
+        self, level2: "Level2File", sweep_index: int, fallback_elevation: float
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        sweep = level2.sweeps[sweep_index]
+        azimuths: List[float] = []
+        elevations: List[float] = []
+        for ray in sweep:
+            header = getattr(ray, "header", None)
+            if header is None and isinstance(ray, tuple):
+                header = ray[0]
+            elevation = None
+            azimuth = None
+            if header is not None:
+                elevation = getattr(header, "elevation", None)
+                if elevation is None:
+                    elevation = getattr(header, "elev_angle", None)
+                azimuth = getattr(header, "azimuth", None)
+                if azimuth is None:
+                    azimuth = getattr(header, "az_angle", None)
+            if elevation is not None:
+                elevations.append(float(elevation))
+            if azimuth is not None:
+                azimuths.append(float(azimuth))
+        if not azimuths:
+            data = self._get_level2_field(level2, sweep_index, ("REF",))
+            if data is not None:
+                azimuths = data[1].tolist()
+        if not azimuths:
+            azimuths = np.linspace(0, 360, 360, endpoint=False).tolist()
+        elevation = float(np.nanmedian(elevations)) if elevations else float(fallback_elevation)
+        ranges = self._get_level2_field(level2, sweep_index, ("REF",))
+        if ranges is not None and ranges[2].size:
+            range_values = ranges[2]
+        else:
+            gate_count = 460
+            gate_spacing_km = 0.25
+            range_values = np.linspace(0, (gate_count - 1) * gate_spacing_km, gate_count)
+        range_values = np.asarray(range_values, dtype=np.float32)
+        if range_values.max() > 1000:  # convert to km if necessary
+            range_values = range_values / 1000.0
+        return np.asarray(azimuths, dtype=np.float32), range_values, elevation
+
+    def _level2_timestamp(
+        self, level2: "Level2File", sweep_index: int, default: dt.datetime
+    ) -> dt.datetime:
+        sweep = level2.sweeps[sweep_index]
+        times: List[dt.datetime] = []
+        for ray in sweep:
+            header = getattr(ray, "header", None)
+            if header is None and isinstance(ray, tuple):
+                header = ray[0]
+            ray_time = None
+            if header is not None:
+                ray_time = getattr(header, "datetime", None)
+                if ray_time is None:
+                    seconds = getattr(header, "time", None)
+                    days = getattr(header, "date", None)
+                    if seconds is not None and days is not None:
+                        try:
+                            ref = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+                            ray_time = ref + dt.timedelta(days=int(days), seconds=float(seconds))
+                        except Exception:
+                            ray_time = None
+            if isinstance(ray_time, dt.datetime):
+                if ray_time.tzinfo is None:
+                    ray_time = ray_time.replace(tzinfo=dt.timezone.utc)
+                times.append(ray_time)
+        if times:
+            return max(times)
+        return default
+
+    def _estimate_kdp(self, phi: np.ndarray, ranges: np.ndarray) -> np.ndarray:
+        phi_array = np.ma.filled(np.asarray(phi, dtype=np.float32), np.nan)
+        if phi_array.ndim != 2 or phi_array.shape[1] < 2:
+            return phi_array
+        dr = np.diff(ranges)
+        if dr.size == 0:
+            return phi_array
+        gradient = np.empty_like(phi_array, dtype=np.float32)
+        gradient[:, 0] = np.nan
+        gradient[:, 1:] = (phi_array[:, 1:] - phi_array[:, :-1]) / dr[np.newaxis, :]
+        return gradient * 0.5
 
 
 def merge_volumes(volumes: Iterable[RadarVolume], product: str) -> Optional[RadarVolume]:

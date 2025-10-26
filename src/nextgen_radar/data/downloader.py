@@ -14,6 +14,11 @@ from typing import Optional
 
 import aiohttp
 
+try:  # pragma: no cover - optional dependency
+    from siphon.nexrad import NexradAwsInterface
+except Exception:  # pragma: no cover
+    NexradAwsInterface = None
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,10 +54,21 @@ class NexradAwsClient:
         self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
+        self._siphon = NexradAwsInterface() if NexradAwsInterface is not None else None
 
     async def latest_object(self, session: aiohttp.ClientSession, *, lookback_days: int = 2) -> Optional[NexradObject]:
         """Return the most recent object for the configured station."""
 
+        if self._siphon is not None:
+            siphon_result = await asyncio.to_thread(self._latest_object_siphon, lookback_days)
+            if siphon_result is not None:
+                return siphon_result
+
+        return await self._latest_object_via_listing(session, lookback_days=lookback_days)
+
+    async def _latest_object_via_listing(
+        self, session: aiohttp.ClientSession, *, lookback_days: int = 2
+    ) -> Optional[NexradObject]:
         now = dt.datetime.utcnow()
         for offset in range(lookback_days + 1):
             day = now - dt.timedelta(days=offset)
@@ -95,6 +111,41 @@ class NexradAwsClient:
                 continue
             timestamp = _parse_stamp(last_modified)
             return NexradObject(key=key, last_modified=timestamp, size=int(size_text))
+        return None
+
+    def _latest_object_siphon(self, lookback_days: int = 2) -> Optional[NexradObject]:
+        if self._siphon is None:
+            return None
+        get_scans = getattr(self._siphon, "get_avail_scans", None)
+        get_filename = getattr(self._siphon, "get_filename", None)
+        if get_scans is None or get_filename is None:
+            return None
+        now = dt.datetime.utcnow()
+        for offset in range(lookback_days + 1):
+            day = now - dt.timedelta(days=offset)
+            try:
+                scans = get_scans(day, self.station)
+            except Exception:
+                continue
+            if not scans:
+                continue
+            latest_scan = scans[-1]
+            try:
+                key = get_filename(day, self.station, latest_scan)
+            except TypeError:
+                try:
+                    key = get_filename(self.station, day, latest_scan)
+                except Exception:
+                    continue
+            except Exception:
+                continue
+            if not isinstance(key, str):
+                continue
+            if "/" not in key:
+                key = f"{day:%Y/%m/%d}/{self.station}/{key}"
+            metadata = parse_volume_metadata(Path(key))
+            timestamp = metadata.timestamp if metadata else dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+            return NexradObject(key=key, last_modified=timestamp, size=0)
         return None
 
     async def download(self, session: aiohttp.ClientSession, obj: NexradObject) -> Path:

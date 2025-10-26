@@ -24,24 +24,30 @@ pip install -e .[development]
 python scripts/run_nextgen.py --station KTLX
 ```
 
-Open `http://127.0.0.1:8000` after the server starts. The API streams live textures to the dashboard located at `templates/dashboard.html`. Serve the HTML with any static host (or load directly with Live Server) and it will automatically pull the latest frames, warnings, and overlay metadata from the running FastAPI app.
+Open `http://127.0.0.1:8000` after the server starts. The API streams live textures to the dashboard located at `templates/dashboard.html`. "Serving" the HTML simply means opening that file through any lightweight static host (an editor's Live Server button or `python -m http.server` both work) so the browser can request frames, warnings, and overlays from the FastAPI app.
 
-> **Note:** The install step brings in [ARM Py-ART](https://arm-doe.github.io/pyart/) so Level-II volumes are decoded automatically—no external tools required.
+> **Note:** Installation pulls in [MetPy](https://unidata.github.io/MetPy/) and [Siphon](https://unidata.github.io/siphon/) so Level-II volumes stream in from AWS, decode in pure Python, and land in xarray without any extra tooling.
 
 ### Configure live ingest
 
-The helper script handles everything from downloading the most recent Level-II scans to decoding them with Py-ART:
+The helper script uses Siphon to locate the latest Level-II scans and MetPy to decode them into xarray datasets automatically:
 
 ```bash
 python scripts/run_nextgen.py --station KFDR --storage ./radar-cache --interval 60
 ```
 
-- `--station` sets the four-letter NEXRAD site.
+- `--station` / `--stations` accepts one or more four-letter NEXRAD sites (e.g. `--station KTLX KFDR`) so you can watch multiple radars at once.
 - `--storage` determines where Level-II files are cached (they're automatically decompressed and reused).
 - `--interval` controls how often the AWS feed is polled for new volumes.
 - `--archive-days` sets how far back in the archive to search when booting.
 
 The ingest manager automatically converts each volume into reflectivity, velocity, dual-pol, and derived fields, then pushes pixel-perfect textures to the WebGL renderer.
+
+### How the MetPy + Siphon ingest works
+
+1. **Siphon** queries the NOAA AWS catalog for each configured station and picks the newest Level-II scan without requiring manual downloads.
+2. **MetPy's `Level2File`** decodes the binary volume into reflectivity, velocity, dual-pol moments, and differential phase entirely in Python.
+3. **xarray** wraps each decoded moment so the smoothing pipeline, derived product calculators, and renderer can work with labeled arrays instantly.
 
 ### Bring your own archives (optional)
 

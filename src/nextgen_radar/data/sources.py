@@ -115,10 +115,12 @@ class NexradAwsSource(BaseRadarSource):
 
     def __init__(self, config: DataSourceConfig, storage_dir: Path) -> None:
         super().__init__(config)
-        if not config.station:
-            raise ValueError("NexradAwsSource requires a station code in DataSourceConfig")
+        station_code = config.station or next((station for station in config.stations if station), None)
+        if not station_code:
+            raise ValueError("NexradAwsSource requires at least one station code in DataSourceConfig")
         self.storage_dir = storage_dir
-        self.client = NexradAwsClient(config.station, storage_dir)
+        self.station = station_code.upper()
+        self.client = NexradAwsClient(self.station, storage_dir)
         self._session: Optional[aiohttp.ClientSession] = None
         self._seen: Set[str] = set()
 
@@ -150,7 +152,7 @@ class NexradAwsSource(BaseRadarSource):
                 timestamp=metadata.timestamp,
                 elevation=0.5,
                 data=None,
-                station=metadata.station,
+                station=metadata.station or self.station,
                 attributes={"version": metadata.version or 0},
                 path=path,
             )

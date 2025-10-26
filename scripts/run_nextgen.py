@@ -23,11 +23,13 @@ def build_config(args: argparse.Namespace) -> RadarConfig:
         )
         for key, definition in product_defs.items()
     }
+    stations = [station.upper() for station in args.stations]
     data_sources = [
         DataSourceConfig(
-            identifier=args.station.lower(),
+            identifier="aws",
             kind="nexrad-aws",
-            station=args.station.upper(),
+            station=stations[0],
+            stations=stations,
             request_interval=args.interval,
             archive_days=args.archive_days,
             products=list(products.keys()),
@@ -38,7 +40,14 @@ def build_config(args: argparse.Namespace) -> RadarConfig:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the NextGen radar server with live NEXRAD ingest")
-    parser.add_argument("--station", default="KTLX", help="Four-letter NEXRAD station ID (e.g. KTLX, KFDR)")
+    parser.add_argument(
+        "--station",
+        "--stations",
+        dest="stations",
+        nargs="+",
+        default=["KTLX"],
+        help="One or more four-letter NEXRAD station IDs (e.g. KTLX KFDR)",
+    )
     parser.add_argument("--storage", default="./data", help="Directory for cached radar volumes")
     parser.add_argument("--host", default="0.0.0.0", help="Host interface for the API server")
     parser.add_argument("--port", type=int, default=8000, help="TCP port for the API server")

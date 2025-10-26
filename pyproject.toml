@@ -25,7 +25,8 @@ dependencies = [
   "pillow>=9.0",
   "jinja2>=3.1",
   "netCDF4>=1.6",
-  "arm_pyart>=1.15"
+  "metpy>=1.5",
+  "siphon>=0.9"
 ]
 
 [project.optional-dependencies]

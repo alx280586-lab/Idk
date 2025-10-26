@@ -31,6 +31,7 @@ class DataSourceConfig:
     products: Sequence[str] = field(default_factory=list)
     kind: str = "http"
     station: Optional[str] = None
+    stations: Sequence[str] = field(default_factory=list)
     archive_days: int = 2
 
 
