@@ -56,6 +56,9 @@ function spawnInitialStorms(storms, env, rand) {
 
 function createStorm(nx, ny, env, rand, id) {
   const intensity = 40 + rand() * 30;
+  const orientation = rand() * Math.PI * 2;
+  const majorAxis = 28 + rand() * 22;
+  const minorAxis = majorAxis * (0.55 + rand() * 0.2);
   return {
     id: id ?? Math.floor(rand() * 1e6),
     x: nx * GRID_SIZE,
@@ -70,6 +73,11 @@ function createStorm(nx, ny, env, rand, id) {
       snow: 0,
       debris: 0
     },
+    orientation,
+    majorAxis,
+    minorAxis,
+    anvilRadius: majorAxis * (1.8 + rand() * 0.6),
+    motion: { x: 0, y: 0 },
     tilt: 8 + rand() * 6,
     lifetime: 0,
     ageMinutes: 0,
@@ -124,10 +132,22 @@ function advectThermodynamics(env, dtMinutes, options) {
 function updateStorm(storm, env, dtMinutes, options) {
   const { meanFlow, shear, rand } = env;
   const moveFactor = dtMinutes / 10;
+  const prevX = storm.x;
+  const prevY = storm.y;
   storm.x += (meanFlow.u + 5 * (rand() - 0.5)) * moveFactor;
   storm.y += (meanFlow.v + 5 * (rand() - 0.5)) * moveFactor;
   storm.x = (storm.x + GRID_SIZE) % GRID_SIZE;
   storm.y = (storm.y + GRID_SIZE) % GRID_SIZE;
+  if (Math.abs(dtMinutes) > 0.001) {
+    let dx = storm.x - prevX;
+    let dy = storm.y - prevY;
+    if (dx > GRID_SIZE / 2) dx -= GRID_SIZE;
+    if (dx < -GRID_SIZE / 2) dx += GRID_SIZE;
+    if (dy > GRID_SIZE / 2) dy -= GRID_SIZE;
+    if (dy < -GRID_SIZE / 2) dy += GRID_SIZE;
+    storm.motion.x = dx / dtMinutes;
+    storm.motion.y = dy / dtMinutes;
+  }
 
   storm.ageMinutes += dtMinutes;
   storm.lifetime += dtMinutes;
@@ -154,6 +174,15 @@ function updateStorm(storm, env, dtMinutes, options) {
 
   storm.intensity += (rand() - 0.5) * dtMinutes * 0.4;
   storm.intensity = Math.max(20, Math.min(80, storm.intensity));
+
+  const targetOrientation = Math.atan2(meanFlow.v + shear.v * 0.3, meanFlow.u + shear.u * 0.3);
+  const trackAngle = Math.atan2(storm.motion.y || 0.0001, storm.motion.x || 0.0001);
+  storm.orientation = blendAngles(storm.orientation, lerpAngle(trackAngle, targetOrientation, 0.5), 0.08);
+  const targetMajor = 24 + storm.intensity * 0.55;
+  const targetMinor = targetMajor * (0.5 + Math.min(0.4, shearMag / 60));
+  storm.majorAxis += (targetMajor - storm.majorAxis) * 0.05;
+  storm.minorAxis += (targetMinor - storm.minorAxis) * 0.05;
+  storm.anvilRadius += (storm.majorAxis * 2.1 - storm.anvilRadius) * 0.03;
 
   storm.track.push({ x: storm.x, y: storm.y, age: 0, tornadic: storm.debrisStrength > 0.6 });
   if (storm.track.length > 120) storm.track.shift();
@@ -198,3 +227,19 @@ export const Atmosphere = {
   create: createAtmo,
   update: updateAtmosphere
 };
+
+function blendAngles(current, target, factor) {
+  const diff = normalizeAngle(target - current);
+  return current + diff * factor;
+}
+
+function lerpAngle(a, b, t) {
+  const diff = normalizeAngle(b - a);
+  return a + diff * t;
+}
+
+function normalizeAngle(angle) {
+  while (angle > Math.PI) angle -= Math.PI * 2;
+  while (angle < -Math.PI) angle += Math.PI * 2;
+  return angle;
+}

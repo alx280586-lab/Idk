@@ -98,7 +98,13 @@
           meta: {}
         };
       
-        if (hasCouplet && minCC < 0.8 && Math.random() > options.falseAlarm * 0.25) {
+        if (
+          storm.phase === "rotation" &&
+          storm.ageMinutes > 90 &&
+          hasCouplet &&
+          minCC < 0.8 &&
+          Math.random() > options.falseAlarm * 0.25
+        ) {
           const warning = { ...baseWarning };
           warning.type = "tornado";
           warning.headline = `TORNADO WARNING – ${Math.round(velDiff)} KT G2G`;
@@ -113,7 +119,7 @@
           warnings.push(warning);
         }
       
-        if (maxRefl > 60 || hailSignal || Math.random() < options.falseAlarm) {
+        if ((maxRefl > 60 || hailSignal) && storm.ageMinutes > 45) {
           const warning = { ...baseWarning };
           warning.type = hailSignal ? "severePds" : "severe";
           warning.headline = hailSignal
@@ -123,7 +129,7 @@
           warnings.push(warning);
         }
       
-        if (storm.phase === "tropical" && maxRefl > 45 && Math.random() > options.falseAlarm * 0.5) {
+        if (storm.type === "tropical" && storm.ageMinutes > 120 && maxRefl > 45 && Math.random() > options.falseAlarm * 0.5) {
           const warning = { ...baseWarning };
           warning.type = "flashFlood";
           warning.headline = "FLASH FLOOD WARNING – TRAINING RAINBANDS";
@@ -131,7 +137,7 @@
           warnings.push(warning);
         }
       
-        if (storm.phase === "decay" && attrs.zdrMean < 0.5 && minCC > 0.95) {
+        if (storm.phase === "decay" && storm.ageMinutes > 150 && attrs.zdrMean < 0.5 && minCC > 0.95) {
           const warning = { ...baseWarning };
           warning.type = "winter";
           warning.headline = "WINTER WEATHER ADVISORY – MIXED PRECIP";
@@ -360,6 +366,9 @@
       
       function createStorm(nx, ny, env, rand, id) {
         const intensity = 40 + rand() * 30;
+        const orientation = rand() * Math.PI * 2;
+        const majorAxis = 28 + rand() * 22;
+        const minorAxis = majorAxis * (0.55 + rand() * 0.2);
         return {
           id: id ?? Math.floor(rand() * 1e6),
           x: nx * GRID_SIZE,
@@ -374,6 +383,11 @@
             snow: 0,
             debris: 0
           },
+          orientation,
+          majorAxis,
+          minorAxis,
+          anvilRadius: majorAxis * (1.8 + rand() * 0.6),
+          motion: { x: 0, y: 0 },
           tilt: 8 + rand() * 6,
           lifetime: 0,
           ageMinutes: 0,
@@ -428,10 +442,22 @@
       function updateStorm(storm, env, dtMinutes, options) {
         const { meanFlow, shear, rand } = env;
         const moveFactor = dtMinutes / 10;
+        const prevX = storm.x;
+        const prevY = storm.y;
         storm.x += (meanFlow.u + 5 * (rand() - 0.5)) * moveFactor;
         storm.y += (meanFlow.v + 5 * (rand() - 0.5)) * moveFactor;
         storm.x = (storm.x + GRID_SIZE) % GRID_SIZE;
         storm.y = (storm.y + GRID_SIZE) % GRID_SIZE;
+        if (Math.abs(dtMinutes) > 0.001) {
+          let dx = storm.x - prevX;
+          let dy = storm.y - prevY;
+          if (dx > GRID_SIZE / 2) dx -= GRID_SIZE;
+          if (dx < -GRID_SIZE / 2) dx += GRID_SIZE;
+          if (dy > GRID_SIZE / 2) dy -= GRID_SIZE;
+          if (dy < -GRID_SIZE / 2) dy += GRID_SIZE;
+          storm.motion.x = dx / dtMinutes;
+          storm.motion.y = dy / dtMinutes;
+        }
       
         storm.ageMinutes += dtMinutes;
         storm.lifetime += dtMinutes;
@@ -458,6 +484,15 @@
       
         storm.intensity += (rand() - 0.5) * dtMinutes * 0.4;
         storm.intensity = Math.max(20, Math.min(80, storm.intensity));
+      
+        const targetOrientation = Math.atan2(meanFlow.v + shear.v * 0.3, meanFlow.u + shear.u * 0.3);
+        const trackAngle = Math.atan2(storm.motion.y || 0.0001, storm.motion.x || 0.0001);
+        storm.orientation = blendAngles(storm.orientation, lerpAngle(trackAngle, targetOrientation, 0.5), 0.08);
+        const targetMajor = 24 + storm.intensity * 0.55;
+        const targetMinor = targetMajor * (0.5 + Math.min(0.4, shearMag / 60));
+        storm.majorAxis += (targetMajor - storm.majorAxis) * 0.05;
+        storm.minorAxis += (targetMinor - storm.minorAxis) * 0.05;
+        storm.anvilRadius += (storm.majorAxis * 2.1 - storm.anvilRadius) * 0.03;
       
         storm.track.push({ x: storm.x, y: storm.y, age: 0, tornadic: storm.debrisStrength > 0.6 });
         if (storm.track.length > 120) storm.track.shift();
@@ -502,6 +537,22 @@
         create: createAtmo,
         update: updateAtmosphere
       };
+      
+      function blendAngles(current, target, factor) {
+        const diff = normalizeAngle(target - current);
+        return current + diff * factor;
+      }
+      
+      function lerpAngle(a, b, t) {
+        const diff = normalizeAngle(b - a);
+        return a + diff * t;
+      }
+      
+      function normalizeAngle(angle) {
+        while (angle > Math.PI) angle -= Math.PI * 2;
+        while (angle < -Math.PI) angle += Math.PI * 2;
+        return angle;
+      }
       
       exports.Atmosphere = Atmosphere;
       exports.createRandom = createRandom;
@@ -700,105 +751,234 @@
       }
       
       function generateFields(radarState, atmoState, options) {
-        const { storms } = atmoState;
+        const { storms, environment } = atmoState;
         const { reflectivity, velocity, spectrumWidth, cc, zdr, kdp, noise } = radarState;
-        const size = radarState.size;
-        noise.fill(0);
-        for (let i = 0; i < size; i++) {
-          reflectivity[i] = 0;
-          velocity[i] = 0;
-          spectrumWidth[i] = 0.5;
-          cc[i] = 0.98;
-          zdr[i] = 0.5;
-          kdp[i] = 0.1;
-        }
+        seedBackground(radarState, environment, options);
       
         for (const storm of storms) {
-          stampStorm(storm, radarState, options);
+          stampStorm(storm, radarState, environment, options);
         }
-        applyBackgroundNoise(radarState, atmoState, options);
+      
+        applyBackgroundArtifacts(radarState, environment, options);
+        finalizeFields(radarState);
         return radarState;
       }
       
-      function stampStorm(storm, radarState, options) {
+      function stampStorm(storm, radarState, environment, options) {
         const { reflectivity, velocity, spectrumWidth, cc, zdr, kdp } = radarState;
-        const baseRadius = 30 + storm.intensity * 0.8;
-        const rotationSign = storm.rotation > 0 ? 1 : -1;
-        const hookBias = Math.min(1, storm.rotation * 0.8);
+        const cos = Math.cos(storm.orientation);
+        const sin = Math.sin(storm.orientation);
+        const major = Math.max(18, storm.majorAxis);
+        const minor = Math.max(12, storm.minorAxis);
+        const anvil = Math.max(major * 1.5, storm.anvilRadius);
+        const radius = Math.ceil(anvil);
+        const hailFactor = storm.hydrometeors?.hail ?? 0;
+        const debris = storm.debrisStrength || 0;
+        const motion = storm.motion || { x: 0, y: 0 };
       
-        for (let y = -baseRadius; y <= baseRadius; y++) {
-          const gy = Math.floor(storm.y + y);
+        for (let dy = -radius; dy <= radius; dy++) {
+          const gy = Math.floor(storm.y + dy);
           if (gy < 0 || gy >= GRID_SIZE) continue;
-          for (let x = -baseRadius; x <= baseRadius; x++) {
-            const gx = Math.floor(storm.x + x);
+          for (let dx = -radius; dx <= radius; dx++) {
+            const gx = Math.floor(storm.x + dx);
             if (gx < 0 || gx >= GRID_SIZE) continue;
             const idx = gy * GRID_SIZE + gx;
-            const dist = Math.hypot(x, y);
-            if (dist > baseRadius) continue;
-            const core = Math.exp(-(dist * dist) / (0.12 * baseRadius * baseRadius));
-            let dBZ = storm.intensity * core;
-            const hook = hookBias * Math.exp(-Math.pow((Math.atan2(y, x) + Math.PI / 2) / 1.4, 2));
-            dBZ += hook * storm.intensity * 0.7;
-            if (storm.phase === "rotation" && dist < baseRadius * 0.35) {
-              dBZ *= 1.2;
+      
+            const relX = gx - storm.x;
+            const relY = gy - storm.y;
+            const alignedX = relX * cos + relY * sin;
+            const alignedY = -relX * sin + relY * cos;
+            const ell = Math.sqrt((alignedX * alignedX) / (major * major) + (alignedY * alignedY) / (minor * minor));
+            if (ell > 2.2) continue;
+      
+            const rangeVecX = gx - RADAR_ORIGIN.x;
+            const rangeVecY = gy - RADAR_ORIGIN.y;
+            const range = Math.hypot(rangeVecX, rangeVecY) + 1e-6;
+            const beamX = rangeVecX / range;
+            const beamY = rangeVecY / range;
+            const stormDist = Math.hypot(relX, relY) + 1e-6;
+      
+            const shield = Math.exp(-Math.max(0, ell - 1.1) * Math.max(0, ell - 1.1) * 1.8);
+            let dBZ = 18 + storm.intensity * 0.25 * shield;
+            const core = Math.exp(-(ell * ell) * 1.6);
+            dBZ = Math.max(dBZ, 35 + storm.intensity * 0.55 * core);
+            const hailCore = Math.exp(-Math.pow(stormDist / (Math.min(major, minor) * 0.55), 2.6));
+            dBZ = Math.max(dBZ, 45 + storm.intensity * 0.35 * core + hailFactor * 30 * hailCore);
+      
+            const hookAngle = Math.atan2(alignedY + minor * 0.15, alignedX + major * 0.2);
+            const hookRadius = Math.sqrt(
+              ((alignedX + major * 0.25) ** 2) / (major * major * 0.6) +
+                ((alignedY + minor * 0.05) ** 2) / (minor * minor * 0.45)
+            );
+            const hook = Math.exp(-Math.pow(hookRadius, 2.2)) * Math.exp(-hookAngle * hookAngle * 0.6);
+            if (alignedX < major * 0.2 && alignedY < minor * 0.65) {
+              dBZ = Math.max(dBZ, 40 + hook * storm.intensity * 0.7);
             }
+      
+            const inflowNotch = Math.exp(
+              -((alignedX + major * 0.35) ** 2) / (major * major * 0.6) - (alignedY / (minor * 0.8)) ** 2
+            );
+            if (alignedX < -major * 0.1 && alignedY > -minor * 0.4) {
+              dBZ *= 1 - inflowNotch * 0.55;
+            }
+      
             if (storm.phase === "decay") {
-              dBZ *= 0.7;
+              dBZ *= 0.65;
+            } else if (storm.phase === "rotation" && stormDist < Math.min(major, minor) * 0.6) {
+              dBZ += 6 * storm.rotation;
             }
-            const attenuation = Math.exp(-dist / (baseRadius * 1.5));
-            dBZ *= attenuation;
-            if (storm.hydrometeors?.hail) {
-              dBZ += storm.hydrometeors.hail * 20 * Math.exp(-(dist * dist) / (baseRadius * baseRadius * 0.4));
-            }
+      
+            const rangeAtten = Math.exp(-range / 520);
+            dBZ = dBZ * rangeAtten + (spatialNoise(gx, gy, environment.seed) - 0.5) * 1.6;
+            dBZ = Math.max(0, dBZ);
+      
             reflectivity[idx] = Math.max(reflectivity[idx], dBZ);
       
-            const toRadar = {
-              x: gx - RADAR_ORIGIN.x,
-              y: gy - RADAR_ORIGIN.y
-            };
-            const range = Math.hypot(toRadar.x, toRadar.y) + 1e-5;
-            const inbound =
-              -((storm.rotation * rotationSign * -toRadar.y) / range) * 35 +
-              (storm.rotation * toRadar.x) / range * 25 +
-              (storm.type === "tropical" ? -storm.rotation * toRadar.y : 0);
-            const translational = ((storm.x - RADAR_ORIGIN.x) * 0.05 + (storm.y - RADAR_ORIGIN.y) * -0.05);
-            let vel = inbound + translational;
-            if (!options.dealias && vel > NYQUIST) vel -= 2 * NYQUIST;
-            if (!options.dealias && vel < -NYQUIST) vel += 2 * NYQUIST;
-            velocity[idx] = clamp(vel, -NYQUIST, NYQUIST);
+            const tangentialSpeed = storm.rotation * 55 * Math.exp(-Math.pow(stormDist / Math.max(major, minor), 1.3));
+            const tangentX = -relY / stormDist;
+            const tangentY = relX / stormDist;
+            const rotationVx = tangentX * tangentialSpeed;
+            const rotationVy = tangentY * tangentialSpeed;
+            const translationScale = 34;
+            const translationVx = motion.x * translationScale + environment.meanFlow.u * 0.4;
+            const translationVy = motion.y * translationScale + environment.meanFlow.v * 0.4;
+            const rearInflow =
+              -25 * Math.exp(-((alignedX + major * 0.05) ** 2) / (major * major * 0.5)) *
+              Math.exp(-(alignedY / (minor * 0.7)) ** 2);
+            const inflowVectorX = cos * rearInflow;
+            const inflowVectorY = sin * rearInflow;
+            let radialVelocity =
+              rotationVx * beamX +
+              rotationVy * beamY +
+              translationVx * beamX +
+              translationVy * beamY +
+              inflowVectorX * beamX +
+              inflowVectorY * beamY;
       
-            const turbulence = 5 + storm.rotation * 30 * Math.exp(-(dist * dist) / (baseRadius * baseRadius * 0.3));
-            spectrumWidth[idx] = Math.max(spectrumWidth[idx], turbulence);
-      
-            let corr = 0.98 - 0.2 * hookBias * Math.exp(-(dist * dist) / (baseRadius * baseRadius * 0.5));
-            if (storm.debrisStrength > 0.4 && dist < baseRadius * 0.2) {
-              corr -= storm.debrisStrength * 0.4;
+            if (!options.dealias) {
+              while (radialVelocity > NYQUIST) radialVelocity -= 2 * NYQUIST;
+              while (radialVelocity < -NYQUIST) radialVelocity += 2 * NYQUIST;
             }
-            cc[idx] = Math.min(cc[idx], corr);
+            velocity[idx] = clamp(radialVelocity, -NYQUIST, NYQUIST);
       
-            let zdrVal = 0.5 + hookBias * 2.5 * Math.max(0, Math.cos(Math.atan2(y, x) - Math.PI / 2));
-            zdrVal -= (storm.hydrometeors?.hail || 0) * 1.5;
-            zdr[idx] = Math.max(-1, Math.min(4, zdrVal));
+            const shearTurb = Math.max(1.2, tangentialSpeed * 0.18) + Math.abs(rearInflow) * 0.05;
+            spectrumWidth[idx] = Math.max(spectrumWidth[idx], shearTurb);
       
-            const rainRate = Math.max(0, dBZ - 20) * 0.03;
-            kdp[idx] = Math.max(kdp[idx], rainRate * 0.4);
+            let corr = 0.985 - shield * 0.08;
+            if (hailFactor > 0.4) {
+              corr -= hailCore * hailFactor * 0.2;
+            }
+            if (debris > 0.15 && stormDist < Math.min(major, minor) * 0.35) {
+              corr -= debris * 0.5 * Math.exp(-Math.pow(stormDist / (minor * 0.5), 3));
+            }
+            cc[idx] = Math.min(cc[idx], Math.max(0.45, corr));
+      
+            let zdrVal = 0.3 + 2.6 * Math.exp(-Math.pow((alignedY - minor * 0.4) / (minor * 0.9), 2)) * Math.max(0, alignedX / major);
+            zdrVal -= hailCore * 1.8 * hailFactor;
+            zdr[idx] = clamp(zdrVal, -1.5, 4.5);
+      
+            const kdpVal = Math.max(0, (dBZ - 35) * 0.04) * (1 + hailFactor * 0.3);
+            kdp[idx] = Math.max(kdp[idx], kdpVal);
           }
         }
       }
       
-      function applyBackgroundNoise(radarState, atmoState, options) {
+      function seedBackground(radarState, environment, options) {
+        const { reflectivity, velocity, spectrumWidth, cc, zdr, kdp, noise } = radarState;
+        const { meanFlow, seed, dayFraction } = environment;
+        const sinPhase = Math.sin(dayFraction * Math.PI * 2);
+        for (let y = 0; y < GRID_SIZE; y++) {
+          for (let x = 0; x < GRID_SIZE; x++) {
+            const idx = y * GRID_SIZE + x;
+            const dx = x - RADAR_ORIGIN.x;
+            const dy = y - RADAR_ORIGIN.y;
+            const range = Math.hypot(dx, dy) + 1e-5;
+            const az = Math.atan2(dy, dx);
+            const baseNoise = spatialNoise(x, y, seed);
+            const clearAir = 3 + 4 * Math.exp(-range / 240) + (baseNoise - 0.5) * 2.2;
+            const sunBoost = sinPhase > 0 ? sinPhase * 1.5 * Math.max(0, Math.cos(az - Math.PI / 2)) : 0;
+            reflectivity[idx] = Math.max(0, clearAir + sunBoost);
+      
+            const flowVx = meanFlow.u * 0.6;
+            const flowVy = meanFlow.v * 0.6;
+            const radial = (flowVx * dx + flowVy * dy) / range;
+            velocity[idx] = clamp(radial, -NYQUIST, NYQUIST);
+      
+            spectrumWidth[idx] = 1.2 + (baseNoise - 0.5) * 0.4;
+            cc[idx] = 0.99;
+            zdr[idx] = 0.2 + (baseNoise - 0.5) * 0.1;
+            kdp[idx] = 0.05;
+            noise[idx] = baseNoise;
+          }
+        }
+      
+        if (!options.clutterFilter) {
+          applyClutterBloom(reflectivity, seed);
+        }
+      }
+      
+      function applyBackgroundArtifacts(radarState, environment, options) {
         const { reflectivity, cc } = radarState;
-        const { environment } = atmoState;
+        const { seed } = environment;
         for (let y = 0; y < GRID_SIZE; y++) {
           for (let x = 0; x < GRID_SIZE; x++) {
             const idx = y * GRID_SIZE + x;
             const range = Math.hypot(x - RADAR_ORIGIN.x, y - RADAR_ORIGIN.y);
-            const attenuation = Math.exp(-range / 380);
-            reflectivity[idx] *= attenuation + 0.2;
-            if (range < 25 && !options.clutterFilter) {
-              reflectivity[idx] = Math.max(reflectivity[idx], 18 + 5 * Math.sin(x * 0.5) * Math.cos(y * 0.5));
+            const attenuation = Math.exp(-range / 420);
+            reflectivity[idx] *= attenuation + 0.3;
+            reflectivity[idx] += (spatialNoise(x * 1.3, y * 1.1, seed) - 0.5) * 0.8;
+            cc[idx] = Math.min(0.995, Math.max(0.4, cc[idx]));
+          }
+        }
+      
+        applyRadialDithering(reflectivity, seed, options.dealias);
+      }
+      
+      function finalizeFields(radarState) {
+        const { reflectivity, velocity, spectrumWidth } = radarState;
+        for (let i = 0; i < reflectivity.length; i++) {
+          reflectivity[i] = Math.max(0, reflectivity[i]);
+          velocity[i] = clamp(velocity[i], -NYQUIST, NYQUIST);
+          spectrumWidth[i] = Math.max(0.5, spectrumWidth[i]);
+        }
+      }
+      
+      function applyClutterBloom(field, seed) {
+        const originX = Math.floor(RADAR_ORIGIN.x);
+        const originY = Math.floor(RADAR_ORIGIN.y);
+        for (let r = 2; r < 32; r++) {
+          const ring = 2 * Math.PI * r;
+          for (let n = 0; n < ring; n++) {
+            const angle = (n / ring) * Math.PI * 2;
+            const x = Math.round(originX + Math.cos(angle) * r);
+            const y = Math.round(originY + Math.sin(angle) * r);
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+            const idx = y * GRID_SIZE + x;
+            const bloom = 20 + 6 * Math.sin(angle * 6) + (spatialNoise(x, y, seed) - 0.5) * 5;
+            field[idx] = Math.max(field[idx], bloom);
+          }
+        }
+      }
+      
+      function applyRadialDithering(field, seed, dealias) {
+        const radialCount = 720;
+        for (let az = 0; az < radialCount; az++) {
+          const angle = (az / radialCount) * Math.PI * 2;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          let previous = 0;
+          for (let r = 0; r < GRID_SIZE * 0.85; r++) {
+            const x = Math.floor(RADAR_ORIGIN.x + cos * r);
+            const y = Math.floor(RADAR_ORIGIN.y + sin * r);
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) break;
+            const idx = y * GRID_SIZE + x;
+            const gateNoise = spatialNoise(r * 0.75, az * 1.5, seed);
+            const jitter = (gateNoise - 0.5) * 3.5;
+            field[idx] = Math.max(0, field[idx] + jitter);
+            if (!dealias && field[idx] < previous - 15) {
+              field[idx] = previous - 10 * gateNoise;
             }
-            cc[idx] = Math.min(0.99, Math.max(0.55, cc[idx]));
+            previous = field[idx];
           }
         }
       }
@@ -825,6 +1005,11 @@
       
       function clamp(v, min, max) {
         return Math.max(min, Math.min(max, v));
+      }
+      
+      function spatialNoise(x, y, seed) {
+        const value = Math.sin((x * 12.9898 + y * 78.233 + seed * 0.001) * 43758.5453);
+        return value - Math.floor(value);
       }
       
       exports.Radar = Radar;

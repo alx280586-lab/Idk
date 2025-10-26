@@ -95,7 +95,13 @@ function evaluateWarnings(storm, attrs, polygon, warnings, timeMinutes, options)
     meta: {}
   };
 
-  if (hasCouplet && minCC < 0.8 && Math.random() > options.falseAlarm * 0.25) {
+  if (
+    storm.phase === "rotation" &&
+    storm.ageMinutes > 90 &&
+    hasCouplet &&
+    minCC < 0.8 &&
+    Math.random() > options.falseAlarm * 0.25
+  ) {
     const warning = { ...baseWarning };
     warning.type = "tornado";
     warning.headline = `TORNADO WARNING – ${Math.round(velDiff)} KT G2G`;
@@ -110,7 +116,7 @@ function evaluateWarnings(storm, attrs, polygon, warnings, timeMinutes, options)
     warnings.push(warning);
   }
 
-  if (maxRefl > 60 || hailSignal || Math.random() < options.falseAlarm) {
+  if ((maxRefl > 60 || hailSignal) && storm.ageMinutes > 45) {
     const warning = { ...baseWarning };
     warning.type = hailSignal ? "severePds" : "severe";
     warning.headline = hailSignal
@@ -120,7 +126,7 @@ function evaluateWarnings(storm, attrs, polygon, warnings, timeMinutes, options)
     warnings.push(warning);
   }
 
-  if (storm.phase === "tropical" && maxRefl > 45 && Math.random() > options.falseAlarm * 0.5) {
+  if (storm.type === "tropical" && storm.ageMinutes > 120 && maxRefl > 45 && Math.random() > options.falseAlarm * 0.5) {
     const warning = { ...baseWarning };
     warning.type = "flashFlood";
     warning.headline = "FLASH FLOOD WARNING – TRAINING RAINBANDS";
@@ -128,7 +134,7 @@ function evaluateWarnings(storm, attrs, polygon, warnings, timeMinutes, options)
     warnings.push(warning);
   }
 
-  if (storm.phase === "decay" && attrs.zdrMean < 0.5 && minCC > 0.95) {
+  if (storm.phase === "decay" && storm.ageMinutes > 150 && attrs.zdrMean < 0.5 && minCC > 0.95) {
     const warning = { ...baseWarning };
     warning.type = "winter";
     warning.headline = "WINTER WEATHER ADVISORY – MIXED PRECIP";
