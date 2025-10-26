@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tornado Probability Forecast Model — Experimental AI Forecast</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-o9N1j7kG6nIBKxEt3G5UpiRaY1oCbcnZ6+QcmGeXjrP9K/Y/xFdV7lvtTDHkJ0Z4wNG0Ax7Anxr1j403mwhMwA==" crossorigin="" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>Tornado Probability Forecast Model — Experimental AI Forecast</h1>
+      <p class="subtitle">Live simulated tornado probabilities inspired by SPC outlooks.</p>
+    </header>
+
+    <main class="content">
+      <section class="map-panel">
+        <div id="map"></div>
+        <div class="legend" id="legend">
+          <h3>Probability Legend</h3>
+          <ul>
+            <li><span class="color-box pct-2"></span>2% (Marginal)</li>
+            <li><span class="color-box pct-5"></span>5% (Slight)</li>
+            <li><span class="color-box pct-10"></span>10% (Slight)</li>
+            <li><span class="color-box pct-15"></span>15% (Enhanced)</li>
+            <li><span class="color-box pct-30"></span>30% (Moderate)</li>
+            <li><span class="color-box pct-45"></span>45% (High)</li>
+            <li><span class="color-box pct-60"></span>60%+ (Extreme)</li>
+          </ul>
+        </div>
+        <div class="info-panel" id="info-panel">
+          <h3>Hover Forecast Details</h3>
+          <div class="info-body">
+            <p>Select a region on the map to view details.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="control-panel">
+        <div class="control">
+          <label for="time-range">Forecast Hour</label>
+          <input type="range" id="time-range" min="0" max="2" step="1" value="0" />
+          <div class="time-label">
+            <span id="time-text">0-24h</span>
+          </div>
+        </div>
+
+        <div class="control">
+          <button id="generate-btn">Generate Forecast</button>
+        </div>
+
+        <section class="model-summary">
+          <h2>Experimental AI Model</h2>
+          <p>
+            This experimental visualization blends a simulated AI forecast model with
+            stochastic weather drivers (CAPE, dewpoint, shear) to produce evolving
+            tornado probabilities across the continental United States.
+          </p>
+          <p>
+            Every update seeds new virtual storm environments, applies Gaussian
+            smoothing to emulate synoptic-scale signals, and classifies risk levels
+            according to SPC-like thresholds.
+          </p>
+        </section>
+
+        <section class="live-status">
+          <h2>Live Update Status</h2>
+          <ul id="status-feed"></ul>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha512-nmmMBbYJp8+6YewsGQKzBSSMSmc5QwDFi1Cdm42Hcps225y7sY9qsK0kGugKgd6Nwf35p3xNmPR9UCeFUV2ZPg==" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
