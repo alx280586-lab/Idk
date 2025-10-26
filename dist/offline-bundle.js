@@ -1633,7 +1633,7 @@
         const fastForwardInput = document.getElementById("fast-forward-input");
         const message = document.getElementById("loading-message");
         return new Promise((resolve) => {
-          form.addEventListener("submit", (event) => {
+          const handleSubmit = (event) => {
             event.preventDefault();
             const dayLengthMinutes = parseFloat(dayLengthInput.value);
             const fastForwardDays = parseFloat(fastForwardInput.value);
@@ -1642,13 +1642,15 @@
             if (message) {
               message.textContent = "Configuring simulation";
             }
+            form.removeEventListener("submit", handleSubmit);
             resolve({
               dayLengthMinutes: Number.isFinite(dayLengthMinutes)
                 ? dayLengthMinutes
                 : state.clock.dayLengthMinutes,
               fastForwardDays: Math.max(0, Number.isFinite(fastForwardDays) ? fastForwardDays : 0)
             });
-          }, { once: true });
+          };
+          form.addEventListener("submit", handleSubmit);
         });
       }
       
