@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            color-scheme: dark;
+            --panel-bg: rgba(10, 14, 28, 0.82);
+            --panel-border: rgba(135, 165, 255, 0.18);
+            --accent: #55b7ff;
+            --warning: #ff6b6b;
+            --text: #f5f8ff;
+            --muted: rgba(245, 248, 255, 0.65);
+            font-family: "Inter", "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at 20% 20%, #14213d 0%, #050914 55%, #01030a 100%);
+            color: var(--text);
+        }
+
+        .radar-shell {
+            position: relative;
+            display: grid;
+            grid-template-columns: minmax(320px, 400px) 1fr;
+            gap: 0;
+            min-height: 100vh;
+        }
+
+        .control-panel {
+            position: relative;
+            padding: 28px 32px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--panel-border);
+            backdrop-filter: blur(18px);
+            display: flex;
+            flex-direction: column;
+            gap: 26px;
+            z-index: 10;
+        }
+
+        .panel-header h1 {
+            margin: 0;
+            font-size: 1.4rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .panel-header span {
+            font-size: 0.8rem;
+            color: var(--muted);
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-size: 0.75rem;
+            letter-spacing: 0.14em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .control-group select,
+        .control-group input[type="range"] {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .warning-feed {
+            display: grid;
+            gap: 12px;
+        }
+
+        .warning-card {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .warning-card strong {
+            display: block;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        canvas#radar-canvas {
+            width: 100%;
+            height: 100vh;
+            display: block;
+            background: radial-gradient(circle at center, rgba(12, 20, 36, 0.9), rgba(2, 4, 9, 0.95));
+            image-rendering: pixelated;
+        }
+
+        .stage {
+            position: relative;
+        }
+
+        .top-banner {
+            position: absolute;
+            top: 32px;
+            left: 32px;
+            padding: 16px 22px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.92), rgba(255, 159, 67, 0.85));
+            box-shadow: 0 18px 36px rgba(255, 107, 107, 0.35);
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .timestamp-chip {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            background: rgba(8, 16, 32, 0.85);
+            border: 1px solid rgba(120, 140, 255, 0.28);
+            font-size: 0.82rem;
+            letter-spacing: 0.08em;
+        }
+
+        .warning-stack {
+            position: absolute;
+            right: 32px;
+            bottom: 32px;
+            display: grid;
+            gap: 12px;
+            width: 260px;
+        }
+
+        .warning-pill {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: rgba(5, 10, 24, 0.82);
+            border: 1px solid rgba(125, 155, 255, 0.22);
+            font-size: 0.9rem;
+        }
+
+        .warning-pill span:first-child {
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .warning-pill span:last-child {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .loop-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .loop-controls button {
+            flex: 1 1 auto;
+            padding: 10px 0;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .loop-controls button:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        @media (max-width: 1024px) {
+            .radar-shell {
+                grid-template-columns: 1fr;
+            }
+
+            .control-panel {
+                position: absolute;
+                inset: auto 0 0 0;
+                flex-direction: row;
+                overflow-x: auto;
+                gap: 22px;
+                padding: 20px 24px;
+                border-right: none;
+                border-top: 1px solid var(--panel-border);
+            }
+
+            .panel-header {
+                min-width: 200px;
+            }
+
+            canvas#radar-canvas {
+                height: 70vh;
+            }
+        }
+    </style>
+</head>
+<body data-api-base="{{ api_base }}">
+<div class="radar-shell">
+    <aside class="control-panel">
+        <div class="panel-header">
+            <span>Next generation radar</span>
+            <h1>{{ title }}</h1>
+        </div>
+        <div class="control-group">
+            <label for="product">Radar Product</label>
+            <select id="product">
+                {% for key, label in products.items() %}
+                <option value="{{ key }}" {% if key == selected_product %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="tilt">Tilt</label>
+            <select id="tilt">
+                {% for tilt in tilts %}
+                <option value="{{ '%.2f'|format(tilt) }}">{{ '%.2f°'|format(tilt) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="range">Range</label>
+            <select id="range">
+                {% for rng in ranges %}
+                <option value="{{ rng }}">{{ rng }} nmi</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="smoothing">Gaussian smoothing</label>
+            <input type="range" id="smoothing" min="0" max="1" step="0.05" value="0.45" />
+        </div>
+        <div class="loop-controls">
+            <button id="play">Play Loop</button>
+            <button id="step">Step</button>
+        </div>
+        <div class="warning-feed" id="warning-feed">
+            {% for warning, count in warnings_count.items() %}
+            <div class="warning-card">
+                <strong>{{ warning }}</strong>
+                <span>{{ count }} active alerts</span>
+            </div>
+            {% endfor %}
+            {% if warnings_count|length == 0 %}
+            <div class="warning-card">
+                <strong>Quiet</strong>
+                <span>No active warnings</span>
+            </div>
+            {% endif %}
+        </div>
+    </aside>
+    <main class="stage">
+        <canvas id="radar-canvas"></canvas>
+        <div class="top-banner" id="highest-warning">{{ overlay.highest_warning or 'No active warnings' }}</div>
+        <div class="timestamp-chip" id="timestamp">Awaiting data…</div>
+        <div class="warning-stack" id="warning-stack">
+            {% for warning, count in warnings_count.items() %}
+            <div class="warning-pill">
+                <span>{{ warning }}</span>
+                <span>{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+</div>
+
+<script>
+    const canvas = document.getElementById('radar-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.clientWidth * dpr;
+        canvas.height = canvas.clientHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let currentProduct = document.getElementById('product').value;
+
+    const API_BASE = (document.body.dataset.apiBase || '').replace(/\/$/, '');
+
+    function buildApiUrl(path) {
+        if (API_BASE) {
+            return `${API_BASE.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+        }
+        return path;
+    }
+
+    async function fetchTexture(product) {
+        try {
+            const response = await fetch(buildApiUrl(`/textures/${product}?_=${Date.now()}`));
+            if (!response.ok) {
+                return;
+            }
+            const blob = await response.blob();
+            const bitmap = await createImageBitmap(blob);
+            const scale = Math.min(canvas.width / bitmap.width, canvas.height / bitmap.height);
+            const drawWidth = bitmap.width * scale;
+            const drawHeight = bitmap.height * scale;
+            const offsetX = (canvas.width - drawWidth) / 2;
+            const offsetY = (canvas.height - drawHeight) / 2;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(bitmap, offsetX, offsetY, drawWidth, drawHeight);
+            document.getElementById('timestamp').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+        } catch (error) {
+            console.warn('Texture fetch failed', error);
+        }
+    }
+
+    async function refreshWarnings() {
+        try {
+            const response = await fetch(buildApiUrl('/warnings'));
+            if (!response.ok) {
+                return;
+            }
+            const data = await response.json();
+            const banner = document.getElementById('highest-warning');
+            banner.textContent = data.highest || 'No active warnings';
+            const stack = document.getElementById('warning-stack');
+            stack.innerHTML = '';
+            const feed = document.getElementById('warning-feed');
+            feed.innerHTML = '';
+            const entries = Object.entries(data.counts);
+            if (entries.length === 0) {
+                const card = document.createElement('div');
+                card.className = 'warning-card';
+                card.innerHTML = '<strong>Quiet</strong><span>No active warnings</span>';
+                feed.appendChild(card);
+                return;
+            }
+            for (const [type, count] of entries) {
+                const pill = document.createElement('div');
+                pill.className = 'warning-pill';
+                pill.innerHTML = `<span>${type}</span><span>${count}</span>`;
+                stack.appendChild(pill);
+                const card = document.createElement('div');
+                card.className = 'warning-card';
+                card.innerHTML = `<strong>${type}</strong><span>${count} active alerts</span>`;
+                feed.appendChild(card);
+            }
+        } catch (error) {
+            console.warn('Warning refresh failed', error);
+        }
+    }
+
+    document.getElementById('product').addEventListener('change', (event) => {
+        currentProduct = event.target.value;
+        fetchTexture(currentProduct);
+    });
+
+    document.getElementById('step').addEventListener('click', () => fetchTexture(currentProduct));
+
+    let loopHandle = null;
+    document.getElementById('play').addEventListener('click', () => {
+        if (loopHandle) {
+            clearInterval(loopHandle);
+            loopHandle = null;
+            return;
+        }
+        loopHandle = setInterval(() => fetchTexture(currentProduct), 2000);
+    });
+
+    fetchTexture(currentProduct);
+    refreshWarnings();
+    setInterval(refreshWarnings, 120000);
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+"""Radar data source interfaces for live and historical feeds."""
+
+from __future__ import annotations
+
+import asyncio
+import datetime as dt
+from dataclasses import dataclass
+from pathlib import Path
+from typing import AsyncGenerator, Dict, Optional, Set
+
+import aiohttp
+from cachetools import TTLCache
+
+from ..config import DataSourceConfig
+from .downloader import NexradAwsClient, VolumeMetadata, parse_volume_metadata
+
+
+@dataclass(slots=True)
+class RadarFrame:
+    """Represents a single radar volume with metadata and payload."""
+
+    product: str
+    timestamp: dt.datetime
+    elevation: float
+    data: Optional[bytes]
+    station: str
+    attributes: Dict[str, float]
+    path: Optional[Path] = None
+
+
+class BaseRadarSource:
+    """Base class for radar data sources."""
+
+    def __init__(self, config: DataSourceConfig) -> None:
+        self.config = config
+
+    async def frames(self) -> AsyncGenerator[RadarFrame, None]:
+        raise NotImplementedError
+
+
+class HttpRadarSource(BaseRadarSource):
+    """Stream radar frames from an HTTP endpoint."""
+
+    def __init__(self, config: DataSourceConfig, session: Optional[aiohttp.ClientSession] = None) -> None:
+        super().__init__(config)
+        self._session = session
+        self._cache: TTLCache[str, bytes] = TTLCache(maxsize=8, ttl=self.config.request_interval)
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            timeout = aiohttp.ClientTimeout(total=self.config.request_interval)
+            self._session = aiohttp.ClientSession(timeout=timeout)
+        return self._session
+
+    async def frames(self) -> AsyncGenerator[RadarFrame, None]:
+        session = await self._get_session()
+        while True:
+            params = {"products": ",".join(self.config.products)} if self.config.products else None
+            headers = {"Authorization": f"Bearer {self.config.auth_token}"} if self.config.auth_token else None
+            async with session.get(self.config.url, params=params, headers=headers) as response:
+                response.raise_for_status()
+                payload = await response.read()
+                cache_key = response.headers.get("ETag") or str(hash(payload))
+                if cache_key in self._cache:
+                    await asyncio.sleep(self.config.request_interval)
+                    continue
+                self._cache[cache_key] = payload
+                metadata = {
+                    "product": response.headers.get("X-Product", "UNKNOWN"),
+                    "timestamp": response.headers.get("X-Timestamp"),
+                    "elevation": response.headers.get("X-Elevation"),
+                    "station": response.headers.get("X-Station", "UNK"),
+                }
+                yield RadarFrame(
+                    product=metadata["product"],
+                    timestamp=dt.datetime.fromisoformat(metadata["timestamp"]),
+                    elevation=float(metadata["elevation"] or 0.5),
+                    data=payload,
+                    station=metadata["station"],
+                    attributes={},
+                )
+            await asyncio.sleep(self.config.request_interval)
+
+    async def close(self) -> None:
+        if self._session is not None:
+            await self._session.close()
+
+
+class FileRadarSource(BaseRadarSource):
+    """Load radar frames from a local archive for historical playback."""
+
+    def __init__(self, config: DataSourceConfig, directory: Path) -> None:
+        super().__init__(config)
+        self.directory = directory
+
+    async def frames(self) -> AsyncGenerator[RadarFrame, None]:
+        patterns = ("*.nc", "*.cdf", "*.nexrad", "*.ar2v", "*.gz")
+        files = sorted({file for pattern in patterns for file in self.directory.glob(pattern)})
+        for file in files:
+            timestamp = dt.datetime.fromtimestamp(file.stat().st_mtime, tz=dt.timezone.utc)
+            yield RadarFrame(
+                product=self.config.products[0] if self.config.products else "UNKNOWN",
+                timestamp=timestamp,
+                elevation=0.5,
+                data=file.read_bytes() if file.suffix != ".nc" else None,
+                station=file.stem.split("_")[0],
+                attributes={},
+                path=file,
+            )
+            await asyncio.sleep(0)
+
+
+class NexradAwsSource(BaseRadarSource):
+    """Download and stream live Level II volumes from NOAA S3."""
+
+    def __init__(self, config: DataSourceConfig, storage_dir: Path) -> None:
+        super().__init__(config)
+        station_code = config.station or next((station for station in config.stations if station), None)
+        if not station_code:
+            raise ValueError("NexradAwsSource requires at least one station code in DataSourceConfig")
+        self.storage_dir = storage_dir
+        self.station = station_code.upper()
+        self.client = NexradAwsClient(self.station, storage_dir)
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._seen: Set[str] = set()
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            timeout = aiohttp.ClientTimeout(total=60)
+            headers = {"User-Agent": "nextgen-radar/0.2 (+https://github.com/dpaulat/supercell-wx)"}
+            self._session = aiohttp.ClientSession(timeout=timeout, headers=headers)
+        return self._session
+
+    async def frames(self) -> AsyncGenerator[RadarFrame, None]:
+        session = await self._get_session()
+        while True:
+            obj = await self.client.latest_object(session, lookback_days=self.config.archive_days)
+            if not obj or obj.key in self._seen:
+                await asyncio.sleep(self.config.request_interval)
+                continue
+            self._seen.add(obj.key)
+            path = await self.client.download(session, obj)
+            metadata = parse_volume_metadata(path)
+            if metadata is None:
+                metadata = VolumeMetadata(
+                    station=path.stem[:4].upper(),
+                    timestamp=dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc),
+                    version=None,
+                )
+            yield RadarFrame(
+                product="LEVEL2",
+                timestamp=metadata.timestamp,
+                elevation=0.5,
+                data=None,
+                station=metadata.station or self.station,
+                attributes={"version": metadata.version or 0},
+                path=path,
+            )
+            await asyncio.sleep(self.config.request_interval)
+
+    async def close(self) -> None:
+        if self._session is not None:
+            await self._session.close()
