@@ -497,6 +497,45 @@ html {
   display: none !important;
 }
 
+.no-bootstrap body {
+  filter: blur(3px);
+}
+
+#file-protocol-warning {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(10, 12, 30, 0.94);
+  color: #f2f6ff;
+  text-align: center;
+  z-index: 5000;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  gap: 1rem;
+}
+
+#file-protocol-warning h2 {
+  font-size: 1.75rem;
+  margin: 0;
+}
+
+#file-protocol-warning p {
+  margin: 0;
+  max-width: 36rem;
+  line-height: 1.6;
+}
+
+#file-protocol-warning code {
+  background: rgba(17, 24, 39, 0.9);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.35rem;
+  color: #9fe7ff;
+  font-size: 0.95rem;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
