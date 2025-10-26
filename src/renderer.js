@@ -46,7 +46,7 @@ void main() {
   float norm = clamp((value - uRange.x) / (uRange.y - uRange.x), 0.0, 1.0);
   vec4 rampColor = texture(uColorRamp, vec2(norm, 0.5));
   vec4 base = texture(uBasemap, v_uv);
-  float dist = distance(v_uv, vec2(${Radar.RADAR_ORIGIN.x / Radar.GRID_SIZE}.0, ${Radar.RADAR_ORIGIN.y / Radar.GRID_SIZE}.0));
+  float dist = distance(v_uv, vec2(${Radar.RADAR_ORIGIN.x / Radar.GRID_SIZE}, ${Radar.RADAR_ORIGIN.y / Radar.GRID_SIZE}));
   float beam = smoothstep(0.0, 0.8, dist);
   float attenuation = exp(-dist * 2.5);
   float ring = sin(dist * 80.0 + uTime * 0.2) * 0.004;
