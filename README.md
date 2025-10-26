@@ -26,6 +26,40 @@ uvicorn nextgen_radar.server.api:create_app --reload
 
 Open `http://127.0.0.1:8000` and serve the `templates/dashboard.html` with your preferred static file host or integrate with a modern frontend framework.
 
+### Decoding Level-II radar with ToolsUI (Easy Mode)
+
+NEXRAD Level-II archives use proprietary BZip2 blocks that cannot be decompressed with standard utilities. The easiest way to prepare data for this project is to use **Unidata's NetCDF-Java ToolsUI** application, which bundles the official Level-II decoder.
+
+1. Download `toolsUI-<version>.jar` from the [NetCDF-Java release page](https://downloads.unidata.ucar.edu/netcdf-java/latest/).
+2. Launch the converter directly from the command line:
+
+   ```bash
+   java -jar toolsUI-<version>.jar UI
+   ```
+
+3. In the ToolsUI window choose **Feature Types → Radar Level II to NetCDF**.
+4. Select your raw Level-II (`*.gz` or `*.ar2v`) file as the input and choose an output location ending in `.nc`.
+5. Press **Convert**. The resulting NetCDF file is immediately compatible with xarray and the rest of the NextGen Radar processing pipeline.
+
+Tips:
+
+- ToolsUI runs anywhere Java is available (Windows, macOS, Linux) and requires no additional Python setup.
+- Store converted volumes in a directory referenced by `FileRadarSource` to enable historical playback.
+- For batch conversions you can supply multiple files to the **Radar Level II to NetCDF** tool; ToolsUI queues them automatically.
+
+### Integrating converted data
+
+Once a Level-II file has been converted, copy it into a directory such as `data/decoded/`. Update your configuration to point a `FileRadarSource` at that directory. The built-in decoder will ingest the NetCDF payload and expose all supported tilts and derived products.
+
+### Live NWS warnings and polygons
+
+This project now queries the official [api.weather.gov](https://api.weather.gov) alerts feed to obtain live warning polygons.
+
+- `GET /warnings` returns the active alert list, warning counts, and the highest-priority headline for the dashboard overlay. Use query parameters such as `zone=ILZ013`, `event=Tornado Warning`, or `point=41.87,-87.62` to filter results.
+- `scripts/render_dashboard.py` fetches the same feed when generating a static dashboard preview so the bottom-right warning counter and top-left banner reflect real data whenever connectivity is available.
+
+Each `StormWarning` includes the simplified warning code (`TOR`, `SVR`, `FFW`, etc.), severity, expiration time, and the polygon vertices (latitude/longitude pairs) suitable for GIS overlays.
+
 ## Development Tasks
 
 - Implement production-grade NEXRAD Level II decoders

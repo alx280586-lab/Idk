@@ -5,21 +5,24 @@ from __future__ import annotations
 
 
 import asyncio
+from collections import Counter
+from io import BytesIO
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
+import aiohttp
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import ORJSONResponse, Response
+from PIL import Image
 
 from ..config import DataSourceConfig, ProductConfig, RadarConfig
 from ..data.decoder import RadarDecoder, RadarVolume
 from ..data.sources import HttpRadarSource, RadarFrame
+from ..data.warnings import fetch_active_warnings
 from ..processing.analysis import StormSummary, summarize_storms
 from ..processing.smoothing import multiscale_gaussian_smoothing
 from ..products.base import build_default_products, derived_products
 from ..rendering.engine import RadarRenderingEngine
-from PIL import Image
-from io import BytesIO
 
 
 class RadarRegistry:
@@ -34,6 +37,7 @@ class RadarRegistry:
         self.history: Dict[str, List[RadarVolume]] = {}
         self.summary: Optional[StormSummary] = None
         self._lock = asyncio.Lock()
+        self._http_session: Optional[aiohttp.ClientSession] = None
 
     async def ingest_frame(self, frame: RadarFrame) -> RadarVolume:
         volume = self.decoder.decode(frame)
@@ -55,6 +59,42 @@ class RadarRegistry:
         async with self._lock:
             self.summary = summary
             self.rendering.update_overlay(summary)
+
+    async def _get_http_session(self) -> aiohttp.ClientSession:
+        if self._http_session is None:
+            timeout = aiohttp.ClientTimeout(total=20)
+            headers = {"User-Agent": "nextgen-radar/0.1 (+https://github.com/dpaulat/supercell-wx)"}
+            self._http_session = aiohttp.ClientSession(timeout=timeout, headers=headers)
+        return self._http_session
+
+    async def fetch_warnings(
+        self,
+        *,
+        zone: Optional[Sequence[str]] = None,
+        area: Optional[str] = None,
+        event: Optional[Sequence[str]] = None,
+        point: Optional[Sequence[float]] = None,
+        limit: int = 50,
+    ) -> StormSummary:
+        session = await self._get_http_session()
+        warnings = await fetch_active_warnings(
+            session=session,
+            zone=zone,
+            area=area,
+            event=event,
+            point=point,
+            limit=limit,
+        )
+        summary = summarize_storms({}, warnings)
+        await self.update_summary(summary)
+        return summary
+
+    async def close(self) -> None:
+        for source in self.sources:
+            if hasattr(source, "close"):
+                await source.close()  # type: ignore[func-returns-value]
+        if self._http_session is not None:
+            await self._http_session.close()
 
 
 async def get_registry(config: RadarConfig = Depends(lambda: default_config())) -> RadarRegistry:
@@ -78,6 +118,10 @@ def default_config() -> RadarConfig:
 def create_app(config: Optional[RadarConfig] = None) -> FastAPI:
     app = FastAPI(default_response_class=ORJSONResponse)
     app.state.registry = RadarRegistry(config or default_config())
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        await app.state.registry.close()
 
     @app.get("/products")
     async def list_products() -> Dict[str, dict]:
@@ -108,6 +152,43 @@ def create_app(config: Optional[RadarConfig] = None) -> FastAPI:
             "warnings": overlay.warnings,
             "highest": overlay.highest_warning,
             "counts": overlay.counts,
+        }
+
+    @app.get("/warnings")
+    async def list_warnings(
+        zone: Optional[str] = None,
+        area: Optional[str] = None,
+        event: Optional[str] = None,
+        point: Optional[str] = None,
+        limit: int = 50,
+    ) -> dict:
+        point_values: Optional[Sequence[float]] = None
+        if point:
+            try:
+                lat_str, lon_str = point.split(",", 1)
+                point_values = [float(lat_str.strip()), float(lon_str.strip())]
+            except (ValueError, AttributeError):
+                raise HTTPException(status_code=400, detail="point must be 'lat,lon'")
+        summary = await app.state.registry.fetch_warnings(
+            zone=zone.split(",") if zone else None,
+            area=area,
+            event=event.split(",") if event else None,
+            point=point_values,
+            limit=limit,
+        )
+        counts = dict(Counter(warning.warning_type for warning in summary.warnings))
+        return {
+            "warnings": [
+                {
+                    "type": warning.warning_type,
+                    "severity": warning.severity,
+                    "expires": warning.expires,
+                    "polygon": warning.polygon,
+                }
+                for warning in summary.warnings
+            ],
+            "counts": counts,
+            "highest": app.state.registry.rendering.overlay_state.highest_warning,
         }
 
     @app.get("/textures/{product}")

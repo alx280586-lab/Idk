@@ -1,20 +1,33 @@
-"""Render the radar dashboard with mock data for prototyping."""
+"""Render the radar dashboard with live NWS warning overlays when available."""
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from collections import Counter
 
 from nextgen_radar.rendering.engine import OverlayState
 from nextgen_radar.ui.dashboard import DashboardContext, DashboardRenderer
+from nextgen_radar.data.warnings import fetch_active_warnings
 
 
-def main() -> None:
-    overlay = OverlayState(
-        warnings=["TOR (Confirmed)", "SVR (Observed)"],
-        highest_warning="TOR - Confirmed",
-    )
-    context = DashboardContext(
+PRIORITY = {"TOR": 3, "SVR": 2, "FFW": 1, "SMW": 1}
+
+
+async def build_overlay() -> OverlayState:
+    warnings = await fetch_active_warnings(limit=20)
+    overlay = OverlayState()
+    overlay.warnings = [f"{warning.warning_type} ({warning.severity})" for warning in warnings]
+    overlay.counts = dict(Counter(warning.warning_type for warning in warnings))
+    if warnings:
+        highest = max(warnings, key=lambda w: PRIORITY.get(w.warning_type, 0))
+        overlay.highest_warning = f"{highest.warning_type} - {highest.severity}"
+    return overlay
+
+
+async def build_context() -> DashboardContext:
+    overlay = await build_overlay()
+    return DashboardContext(
         title="NextGen Radar",
         products={
             "REF": "Reflectivity",
@@ -27,9 +40,12 @@ def main() -> None:
         ranges=[60, 120, 248],
         smoothing_levels=[0.25, 0.5, 0.75, 1.0],
         overlay=overlay,
-        warnings_count={"TOR": 2, "SVR": 1},
+        warnings_count=overlay.counts,
     )
 
+
+def main() -> None:
+    context = asyncio.run(build_context())
     renderer = DashboardRenderer(Path("templates"))
     html = asyncio.run(renderer.render(context))
     output = Path("build/dashboard.html")

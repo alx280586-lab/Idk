@@ -21,9 +21,10 @@ class RadarFrame:
     product: str
     timestamp: dt.datetime
     elevation: float
-    data: bytes
+    data: Optional[bytes]
     station: str
     attributes: Dict[str, float]
+    path: Optional[Path] = None
 
 
 class BaseRadarSource:
@@ -75,7 +76,7 @@ class HttpRadarSource(BaseRadarSource):
                     elevation=float(metadata["elevation"] or 0.5),
                     data=payload,
                     station=metadata["station"],
-                    attributes={}
+                    attributes={},
                 )
             await asyncio.sleep(self.config.request_interval)
 
@@ -92,14 +93,17 @@ class FileRadarSource(BaseRadarSource):
         self.directory = directory
 
     async def frames(self) -> AsyncGenerator[RadarFrame, None]:
-        for file in sorted(self.directory.glob("*.nexrad")):
+        patterns = ("*.nc", "*.cdf", "*.nexrad", "*.ar2v", "*.gz")
+        files = sorted({file for pattern in patterns for file in self.directory.glob(pattern)})
+        for file in files:
             timestamp = dt.datetime.fromtimestamp(file.stat().st_mtime, tz=dt.timezone.utc)
             yield RadarFrame(
                 product=self.config.products[0] if self.config.products else "UNKNOWN",
                 timestamp=timestamp,
                 elevation=0.5,
-                data=file.read_bytes(),
+                data=file.read_bytes() if file.suffix != ".nc" else None,
                 station=file.stem.split("_")[0],
                 attributes={},
+                path=file,
             )
             await asyncio.sleep(0)
