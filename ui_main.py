@@ -1,7 +1,7 @@
 """PyQt6 GUI for the synthetic radar simulator."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List
 
 from PyQt6.QtCore import Qt, QTimer
@@ -226,7 +226,7 @@ class RadarWindow(QMainWindow):
         options = self._create_render_options(product)
         warnings = self.frame_warnings[self.current_index]
         self.renderer.draw(product, array, self.model.lon_grid, self.model.lat_grid, warnings, options)
-        sim_time = self.sim_start + frame.timestamp_minutes * np.timedelta64(1, "m")
+        sim_time = self.sim_start + timedelta(minutes=frame.timestamp_minutes)
         storm_count = frame.metadata.get("storm_count", len(frame.storms))
         self._populate_warning_list(warnings)
         self.status_label.setText(
