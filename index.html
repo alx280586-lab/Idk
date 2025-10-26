@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synthetic Weather Radar Simulator</title>
+  <link rel="stylesheet" href="styles/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="top-bar">
+      <div class="site-id">KTLX | OKLAHOMA CITY SIM</div>
+      <div class="sim-time" id="sim-time">SIM TIME 00:00 UTC</div>
+      <div class="product-label" id="product-label">REFLECTIVITY</div>
+    </div>
+    <div id="main-area">
+      <div id="control-drawer" class="collapsed">
+        <button id="drawer-toggle" aria-label="Toggle controls">☰</button>
+        <div class="drawer-content">
+          <div class="drawer-tabs">
+            <button data-tab="display" class="active">Display</button>
+            <button data-tab="physics">Physics</button>
+            <button data-tab="analysis">Analysis</button>
+          </div>
+          <div class="drawer-panel active" data-panel="display">
+            <label>Radar Product
+              <select id="product-select">
+                <option value="reflectivity">Reflectivity</option>
+                <option value="velocity">Velocity</option>
+                <option value="spectrumWidth">Spectrum Width</option>
+                <option value="cc">Correlation Coefficient</option>
+                <option value="zdr">Differential Reflectivity</option>
+                <option value="kdp">Specific Differential Phase</option>
+              </select>
+            </label>
+            <label class="toggle"><input type="checkbox" id="clutter-toggle" /> Clutter Filter</label>
+            <label class="toggle"><input type="checkbox" id="dealias-toggle" /> Dealias Velocity</label>
+            <label class="toggle"><input type="checkbox" id="dualpol-toggle" checked /> Dual-Pol QC</label>
+            <label>Brightness <input type="range" id="brightness-slider" min="0.5" max="1.5" step="0.01" value="1" /></label>
+            <label>Contrast <input type="range" id="contrast-slider" min="0.5" max="1.5" step="0.01" value="1" /></label>
+            <label>Beam Broadening <input type="range" id="beam-slider" min="0" max="1" step="0.01" value="0.3" /></label>
+            <label class="toggle"><input type="checkbox" id="colorblind-toggle" /> Color-Blind Mode</label>
+          </div>
+          <div class="drawer-panel" data-panel="physics">
+            <label class="toggle"><input type="checkbox" id="diurnal-toggle" checked /> Diurnal Heating</label>
+            <label class="toggle"><input type="checkbox" id="moisture-toggle" checked /> Moisture Advection</label>
+            <label>Tornado Frequency <input type="range" id="tornado-slider" min="0" max="1" step="0.01" value="0.35" /></label>
+            <label>False Alarm Rate <input type="range" id="falsealarm-slider" min="0" max="0.5" step="0.01" value="0.05" /></label>
+            <button id="reset-env">Reset Environment</button>
+          </div>
+          <div class="drawer-panel" data-panel="analysis">
+            <label class="toggle"><input type="checkbox" id="tracks-toggle" checked /> Storm Tracks</label>
+            <label class="toggle"><input type="checkbox" id="shear-toggle" /> Shear Vectors</label>
+            <label class="toggle"><input type="checkbox" id="accumulation-toggle" /> Rainfall Accumulation</label>
+            <label class="toggle"><input type="checkbox" id="hailprob-toggle" /> Hail Probability</label>
+            <label class="toggle"><input type="checkbox" id="phase-toggle" /> Phase Overlay</label>
+            <label class="toggle"><input type="checkbox" id="education-toggle" /> Educational Annotations</label>
+          </div>
+        </div>
+      </div>
+      <div id="canvas-wrapper">
+        <canvas id="radar-canvas" width="1280" height="720"></canvas>
+        <canvas id="overlay-canvas" width="1280" height="720"></canvas>
+        <div id="legend">
+          <div class="legend-title">dBZ</div>
+          <canvas id="legend-gradient" width="32" height="256"></canvas>
+          <div class="legend-controls">
+            <label>Bright <input type="range" id="legend-bright" min="0.7" max="1.5" step="0.01" value="1"></label>
+            <label>Gamma <input type="range" id="legend-gamma" min="0.5" max="2" step="0.05" value="1"></label>
+          </div>
+        </div>
+        <div id="warnings-layer"></div>
+        <div id="tooltip" hidden></div>
+      </div>
+    </div>
+    <div id="timeline">
+      <div id="transport-controls">
+        <button id="rewind-btn">⏪</button>
+        <button id="play-btn">▶</button>
+        <button id="pause-btn" class="hidden">⏸</button>
+        <button id="ff-btn">⏩</button>
+      </div>
+      <input type="range" id="time-slider" min="0" max="1440" value="0" />
+      <div id="time-labels"></div>
+    </div>
+    <div id="console">
+      <div class="console-header">
+        <span>Warning Log</span>
+        <button id="toggle-console">−</button>
+      </div>
+      <div id="console-body"></div>
+      <button id="export-log">Export CSV</button>
+    </div>
+    <div id="analysis-panel">
+      <h3>Meteorological Diagnostics</h3>
+      <div class="metrics">
+        <div><span>CAPE</span><span id="cape-value">0 J/kg</span></div>
+        <div><span>Shear</span><span id="shear-value">0 kt</span></div>
+        <div><span>Helicity</span><span id="helicity-value">0 m²/s²</span></div>
+      </div>
+      <div id="afd-panel">
+        <h4>Area Forecast Discussion</h4>
+        <div id="afd-log"></div>
+      </div>
+    </div>
+  </div>
+  <div id="loading-screen" class="visible">
+    <div class="loading-content">
+      <div class="radar-sweep"></div>
+      <p>Initializing Atmosphere – Generating Synthetic CAPE Fields</p>
+      <div class="loading-bar"><div class="progress"></div></div>
+    </div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
