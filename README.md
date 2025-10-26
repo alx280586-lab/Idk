@@ -44,3 +44,16 @@ Modern browsers block ES module scripts from loading when a page is opened direc
 3. When the boot splash appears, configure the simulated day length and optional fast-forwarding, then start the run.
 
 If you need to host the simulator elsewhere, deploy the contents of this repository to any static hosting provider. No backend components are required.
+
+### Allowing custom hostnames
+
+The frontend validates `window.location.hostname` before loading the WebGL runtime. Common local development hosts—`localhost`, `127.0.0.1`, `0.0.0.0`, and `[::1]`—are permitted automatically. To run behind a different proxy or vanity domain, expose an allow list before the inline bootstrap script executes:
+
+```html
+<script>
+  window.RADAR_ALLOWED_HOSTS = ["weatherlab.test", "staging.radar.local"];
+  window.RADAR_ALLOWED_HOST_PATTERNS = [".internal.wx"];
+</script>
+```
+
+Alternatively, add comma-separated `data-allowed-hosts` or `data-allowed-patterns` attributes to the `<script id="bootstrap-script">` tag in `index.html`.

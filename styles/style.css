@@ -501,7 +501,8 @@ html {
   filter: blur(3px);
 }
 
-#file-protocol-warning {
+#file-protocol-warning,
+#host-validation-warning {
   position: fixed;
   inset: 0;
   display: flex;
@@ -517,23 +518,33 @@ html {
   gap: 1rem;
 }
 
-#file-protocol-warning h2 {
+#file-protocol-warning h2,
+#host-validation-warning h2 {
   font-size: 1.75rem;
   margin: 0;
 }
 
-#file-protocol-warning p {
+#file-protocol-warning p,
+#host-validation-warning p {
   margin: 0;
   max-width: 36rem;
   line-height: 1.6;
 }
 
-#file-protocol-warning code {
+#file-protocol-warning code,
+#host-validation-warning code {
   background: rgba(17, 24, 39, 0.9);
   padding: 0.15rem 0.35rem;
   border-radius: 0.35rem;
   color: #9fe7ff;
   font-size: 0.95rem;
+}
+
+#host-validation-warning .allowed-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 ::-webkit-scrollbar {

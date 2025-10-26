@@ -125,19 +125,85 @@
   </div>
   <script id="bootstrap-script">
     (function () {
-      if (window.location.protocol === "file:") {
+      function renderBlockingMessage(id, html) {
         const warning = document.createElement("div");
-        warning.id = "file-protocol-warning";
-        warning.innerHTML = "<h2>Local file access detected</h2><p>The simulator needs to be served over HTTP in order to load its modules. Start a local web server (for example with <code>npx serve</code> or <code>python -m http.server</code>) and open <code>http://localhost:PORT/index.html</code>.</p>";
+        warning.id = id;
+        warning.innerHTML = html;
         document.body.appendChild(warning);
         document.documentElement.classList.add("no-bootstrap");
+      }
+
+      if (window.location.protocol === "file:") {
+        renderBlockingMessage(
+          "file-protocol-warning",
+          "<h2>Local file access detected</h2><p>The simulator needs to be served over HTTP in order to load its modules. Start a local web server (for example with <code>npx serve</code> or <code>python -m http.server</code>) and open <code>http://localhost:PORT/index.html</code>.</p>"
+        );
+        return;
+      }
+
+      const bootstrap = document.currentScript;
+      const configuredHosts = (bootstrap?.getAttribute("data-allowed-hosts") || "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      const configuredPatterns = (bootstrap?.getAttribute("data-allowed-patterns") || "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+
+      const runtimeHosts = Array.isArray(window.RADAR_ALLOWED_HOSTS)
+        ? window.RADAR_ALLOWED_HOSTS.map((value) => `${value}`.toLowerCase())
+        : [];
+      const runtimePatterns = Array.isArray(window.RADAR_ALLOWED_HOST_PATTERNS)
+        ? window.RADAR_ALLOWED_HOST_PATTERNS.map((value) => `${value}`.toLowerCase())
+        : [];
+
+      const allowedHosts = new Set([
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "[::1]",
+        ...configuredHosts,
+        ...runtimeHosts
+      ]);
+      const allowedPatterns = [...configuredPatterns, ...runtimePatterns];
+
+      const hostName = (window.location.hostname || "").toLowerCase();
+
+      function classifyHost(host) {
+        if (!host) return "file";
+        if (host === "localhost" || host.endsWith(".localhost")) return "localhost";
+        if (host === "[::1]") return "loopback-ipv6";
+        if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host.startsWith("127.") ? "loopback" : "ipv4";
+        return host.includes(".") ? "domain" : "unknown";
+      }
+
+      const hostType = classifyHost(hostName);
+      const inWhitelist =
+        !hostName ||
+        allowedHosts.has(hostName) ||
+        allowedPatterns.some((pattern) => hostName.endsWith(pattern));
+
+      if (!inWhitelist) {
+        const diagnostics = { hostName, hostType };
+        console.error("Host validation failed:", diagnostics);
+        console.error("Host is not supported");
+        console.error("Host is not in insights whitelist");
+        const listItems = Array.from(allowedHosts)
+          .concat(allowedPatterns.map((pattern) => `*.${pattern.replace(/^\*?\.?/, "")}`))
+          .map((entry) => `<code>${entry}</code>`)
+          .join(" ");
+        renderBlockingMessage(
+          "host-validation-warning",
+          `<h2>Unsupported host</h2><p>The simulator blocks telemetry and rendering on unknown hosts. Add <code>${hostName}</code> to <code>RADAR_ALLOWED_HOSTS</code> or serve it from one of the allowed domains listed below.</p><p class="allowed-list">Allowed hosts: ${listItems}</p>`
+        );
         return;
       }
 
       const script = document.createElement("script");
       script.type = "module";
       script.src = "src/main.js";
-      document.currentScript.after(script);
+      bootstrap.after(script);
     })();
   </script>
 </body>
