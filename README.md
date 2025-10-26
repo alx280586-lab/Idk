@@ -24,7 +24,7 @@ pip install -e .[development]
 python scripts/run_nextgen.py --station KTLX
 ```
 
-Open `http://127.0.0.1:8000` after the server starts. The API streams live textures to the dashboard located at `templates/dashboard.html`. "Serving" the HTML simply means opening that file through any lightweight static host (an editor's Live Server button or `python -m http.server` both work) so the browser can request frames, warnings, and overlays from the FastAPI app.
+Open `http://127.0.0.1:8000/` after the server starts. FastAPI now renders the dashboard template itself, so the UI and API share the same origin and the textures/warnings load without any manual static hosting.
 
 > **Note:** Installation pulls in [MetPy](https://unidata.github.io/MetPy/) and [Siphon](https://unidata.github.io/siphon/) so Level-II volumes stream in from AWS, decode in pure Python, and land in xarray without any extra tooling.
 

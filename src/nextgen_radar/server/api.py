@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 import aiohttp
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import ORJSONResponse, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, ORJSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from PIL import Image
 import xarray as xr
 
@@ -105,7 +107,10 @@ class RadarRegistry:
     async def _get_http_session(self) -> aiohttp.ClientSession:
         if self._http_session is None:
             timeout = aiohttp.ClientTimeout(total=20)
-            headers = {"User-Agent": "nextgen-radar/0.1 (+https://github.com/dpaulat/supercell-wx)"}
+            headers = {
+                "User-Agent": "nextgen-radar/0.1 (mailto:alx280586@gmail.com)",
+                "Accept": "application/geo+json",
+            }
             self._http_session = aiohttp.ClientSession(timeout=timeout, headers=headers)
         return self._http_session
 
@@ -197,6 +202,34 @@ def create_app(config: Optional[RadarConfig] = None) -> FastAPI:
     app = FastAPI(default_response_class=ORJSONResponse)
     app.state.registry = RadarRegistry(config or default_config())
 
+    project_root = Path(__file__).resolve().parents[3]
+    templates = Jinja2Templates(directory=str(project_root / "templates"))
+    static_dir = project_root / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard(request: Request) -> HTMLResponse:
+        registry: RadarRegistry = app.state.registry
+        overlay = registry.rendering.overlay_summary()
+        product_map = {
+            product_id: registry.products[product_id].display_name or product_id
+            for product_id in sorted(registry.products)
+        }
+        selected_product = next(iter(product_map)) if product_map else ""
+        context = {
+            "request": request,
+            "title": "NextGen Radar",
+            "products": product_map,
+            "selected_product": selected_product,
+            "tilts": [0.5, 0.9, 1.5, 2.4, 3.1],
+            "ranges": [60, 120, 180, 248],
+            "warnings_count": overlay.counts,
+            "overlay": overlay,
+            "api_base": str(request.base_url),
+        }
+        return templates.TemplateResponse("dashboard.html", context)
+
     @app.on_event("startup")
     async def _startup() -> None:
         await app.state.registry.start()
@@ -287,3 +320,4 @@ def create_app(config: Optional[RadarConfig] = None) -> FastAPI:
 
 
 __all__ = ["create_app", "default_config", "RadarRegistry"]
+

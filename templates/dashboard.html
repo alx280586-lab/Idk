@@ -220,7 +220,7 @@
         }
     </style>
 </head>
-<body>
+<body data-api-base="{{ api_base }}">
 <div class="radar-shell">
     <aside class="control-panel">
         <div class="panel-header">
@@ -307,9 +307,18 @@
 
     let currentProduct = document.getElementById('product').value;
 
+    const API_BASE = (document.body.dataset.apiBase || '').replace(/\/$/, '');
+
+    function buildApiUrl(path) {
+        if (API_BASE) {
+            return `${API_BASE.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+        }
+        return path;
+    }
+
     async function fetchTexture(product) {
         try {
-            const response = await fetch(`/textures/${product}?_=${Date.now()}`);
+            const response = await fetch(buildApiUrl(`/textures/${product}?_=${Date.now()}`));
             if (!response.ok) {
                 return;
             }
@@ -331,7 +340,7 @@
 
     async function refreshWarnings() {
         try {
-            const response = await fetch('/warnings');
+            const response = await fetch(buildApiUrl('/warnings'));
             if (!response.ok) {
                 return;
             }

@@ -11,7 +11,7 @@ from ..processing.analysis import StormWarning
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 DEFAULT_HEADERS = {
-    "User-Agent": "nextgen-radar/0.1 (+https://github.com/dpaulat/supercell-wx)",
+    "User-Agent": "nextgen-radar/0.1 (mailto:alx280586@gmail.com)",
     "Accept": "application/geo+json",
 }
 
