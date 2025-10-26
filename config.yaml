@@ -1,0 +1,76 @@
+# Simulator configuration for the synthetic radar application
+simulation:
+  seed: 202405
+  duration_hours: 24
+  timestep_minutes: 5
+  grid_width: 360
+  grid_height: 220
+  lon_min: -125.0
+  lon_max: -66.0
+  lat_min: 24.0
+  lat_max: 50.0
+  base_environmental_wind: 18.0  # m/s toward east
+  nyquist_velocity: 32.0
+  radar_origin_lon: -98.0
+  radar_origin_lat: 36.0
+  clutter_ring_radius_km: 40.0
+  noise_level: 1.5
+  composite_tilts: 4
+
+storm_types:
+  supercell:
+    probability: 0.25
+    max_count: 5
+  bow_echo:
+    probability: 0.2
+    max_count: 4
+  pulse:
+    probability: 0.35
+    max_count: 12
+  winter:
+    probability: 0.2
+    max_count: 6
+
+detectors:
+  tornado_shear_threshold: 38.0
+  tornado_reflectivity_threshold: 48.0
+  debris_cc_threshold: 0.82
+  debris_spectrum_threshold: 6.0
+  hail_reflectivity_threshold: 60.0
+  hail_zdr_drop: 0.5
+  bow_velocity_threshold: 24.0
+  flooding_kdp_threshold: 2.5
+  flooding_duration_minutes: 45
+  wind_damage_threshold: 30.0
+
+warnings:
+  default_duration_minutes: 45
+  pds_severity_threshold: 0.75
+  emergency_threshold: 0.9
+
+rendering:
+  blur_sigma: 1.4
+  beam_broadening_rate: 0.0015
+  map_projection: "LambertConformal"
+  product_defaults:
+    Reflectivity:
+      vmin: -5
+      vmax: 75
+    Velocity:
+      vmin: -40
+      vmax: 40
+    Spectrum Width:
+      vmin: 0
+      vmax: 12
+    Correlation Coefficient:
+      vmin: 0.5
+      vmax: 1.0
+    Differential Reflectivity:
+      vmin: -1.5
+      vmax: 5.0
+    Specific Differential Phase:
+      vmin: -1.0
+      vmax: 6.0
+    Composite Reflectivity:
+      vmin: -5
+      vmax: 75
