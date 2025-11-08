@@ -1,0 +1,43 @@
+model:
+  vocab_size: 50000
+  context_length: 4096
+  hidden_size: 3072
+  intermediate_size: 8192
+  num_attention_heads: 32
+  num_key_value_heads: 8
+  num_layers: 36
+  dropout: 0.0
+  activation_dropout: 0.1
+  gradient_checkpointing: true
+  use_flash_attention: true
+
+training:
+  train_data:
+    - data/train.jsonl
+  eval_data:
+    - data/val.jsonl
+  tokenizer_path: tokenizer/chatweaver-spm.model
+  output_dir: checkpoints/chatweaver-4b
+  batch_size: 128
+  micro_batch_size: 2
+  max_steps: 2000
+  save_interval: 200
+  eval_interval: 200
+  log_interval: 20
+  precision: bf16
+  gradient_accumulation: null
+  fsdp: false
+  resume_from: null
+  lora: null
+
+optimizer:
+  lr: 0.0002
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+  eps: 1.0e-8
+  max_grad_norm: 1.0
+
+scheduler:
+  warmup_steps: 200
+  total_steps: 2000
+  min_lr_ratio: 0.1
