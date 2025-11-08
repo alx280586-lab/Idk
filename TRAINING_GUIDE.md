@@ -13,8 +13,34 @@ this repository's root directory.
    pip install -r requirements.txt
    ```
 
-   > **Tip:** For GPU training, install the matching CUDA build of PyTorch from
-   > [pytorch.org](https://pytorch.org/get-started/locally/).
+### Install PyTorch
+
+- **CPU-only wheel** (works everywhere, slower but great for sanity checks):
+
+  ```bash
+  pip install torch --index-url https://download.pytorch.org/whl/cpu
+  ```
+
+- **NVIDIA GPU (CUDA 12.1)**:
+
+  ```bash
+  pip install torch --index-url https://download.pytorch.org/whl/cu121
+  ```
+
+Visit [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)
+for additional CUDA versions. If you already installed PyTorch via the
+requirements file, you can skip these commands.
+
+### Verify your setup
+
+Run the environment doctor to confirm PyTorch and SentencePiece are available:
+
+```bash
+python quickstart.py --doctor
+```
+
+You should see ✓ next to both dependencies. If PyTorch is missing, rerun the
+commands above and make sure your Python environment is active.
 
 ## 2. Pick a Training Path
 

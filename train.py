@@ -10,7 +10,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-import torch
+try:
+    import torch
+except ImportError as exc:  # pragma: no cover - import guard
+    raise SystemExit(
+        "PyTorch is required to run ChatWeaver training.\n"
+        "Install the dependencies with:\n"
+        "  pip install -r requirements.txt\n\n"
+        "If you prefer a manual install, grab the CPU wheel with:\n"
+        "  pip install torch --index-url https://download.pytorch.org/whl/cpu\n\n"
+        "See TRAINING_GUIDE.md#install-pytorch for GPU wheel links and troubleshooting tips."
+    ) from exc
+
 import torch.distributed as dist
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, Dataset

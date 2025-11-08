@@ -7,6 +7,9 @@ bootstrap an experiment without manually editing YAML files.  It will:
 2. Populate sensible model/training defaults for the chosen scale preset.
 3. Launch the standard training loop from :mod:`train`.
 
+Run ``python quickstart.py --doctor`` first if you want to verify PyTorch and
+SentencePiece are installed before kicking off a job.
+
 The defaults target small-scale hardware (single consumer GPU or CPU demo),
 but you can override batch sizes, precision, and the number of training steps
 through CLI flags.  See ``TRAINING_GUIDE.md`` for a more comprehensive guide.
@@ -15,20 +18,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, Sequence
+from typing import TYPE_CHECKING, Dict, Sequence
 
-import sentencepiece as spm
+try:
+    import sentencepiece as spm
+except ImportError as exc:  # pragma: no cover - import guard
+    raise SystemExit(
+        "SentencePiece is required for the quickstart workflow.\n"
+        "Install the dependencies with:\n"
+        "  pip install -r requirements.txt"
+    ) from exc
 
-from model import ChatWeaverConfig
 from tokenizer_train import iter_corpus, write_sentencepiece_input
-from train import (
-    OptimizerConfig,
-    SchedulerConfig,
-    TrainingConfig,
-    run_training,
-)
+
+if TYPE_CHECKING:  # pragma: no cover - import-time type hints only
+    from model import ChatWeaverConfig
+    from train import OptimizerConfig, SchedulerConfig, TrainingConfig
+    from train import run_training as RunTrainingFn
 
 MODEL_PRESETS: Dict[str, Dict[str, int | float | bool]] = {
     "mini": {
@@ -70,6 +79,42 @@ def ensure_paths(paths: Sequence[str]) -> Sequence[Path]:
     return resolved
 
 
+def run_doctor() -> None:
+    """Inspect the local Python environment and print actionable guidance."""
+
+    print("=== ChatWeaver Quickstart Doctor ===")
+    print(f"Python: {platform.python_version()} ({platform.platform()})")
+
+    missing = False
+
+    try:
+        import torch  # type: ignore
+
+        print(f"✔ PyTorch {torch.__version__} detected")
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            print(f"  CUDA available: {device_name}")
+        else:
+            print("  CUDA not detected — training will run on CPU unless you install GPU drivers/wheels.")
+    except ImportError:
+        missing = True
+        print("✖ PyTorch is missing. Install it with one of:")
+        print("    pip install -r requirements.txt")
+        print("    pip install torch --index-url https://download.pytorch.org/whl/cpu  # CPU build")
+        print("    pip install torch --index-url https://download.pytorch.org/whl/cu121  # CUDA 12.1 build")
+
+    try:
+        import sentencepiece  # type: ignore
+
+        print(f"✔ SentencePiece {sentencepiece.__version__} detected")
+    except ImportError:
+        missing = True
+        print("✖ SentencePiece is missing. Install it with: pip install sentencepiece")
+
+    if missing:
+        raise SystemExit(1)
+
+
 def train_quickstart_tokenizer(
     corpus_paths: Sequence[Path], work_dir: Path, vocab_size: int, jsonl_text_field: str | None
 ) -> Path:
@@ -98,12 +143,17 @@ def train_quickstart_tokenizer(
     return Path(f"{model_prefix}.model")
 
 
-def build_model_config(preset: str, vocab_size: int, context_length: int | None) -> ChatWeaverConfig:
+def build_model_config(
+    preset: str,
+    vocab_size: int,
+    context_length: int | None,
+    config_cls: type["ChatWeaverConfig"],
+) -> "ChatWeaverConfig":
     preset_values = MODEL_PRESETS[preset].copy()
     if context_length is not None:
         preset_values["context_length"] = context_length
     preset_values["vocab_size"] = vocab_size
-    return ChatWeaverConfig(**preset_values)  # type: ignore[arg-type]
+    return config_cls(**preset_values)  # type: ignore[arg-type]
 
 
 def build_training_config(
@@ -111,9 +161,11 @@ def build_training_config(
     tokenizer_path: Path,
     output_dir: Path,
     args: argparse.Namespace,
-) -> TrainingConfig:
+) -> "TrainingConfig":
     output_dir.mkdir(parents=True, exist_ok=True)
     eval_files = args.val_data if args.val_data else None
+    from train import TrainingConfig  # Local import to delay PyTorch dependency
+
     cfg = TrainingConfig(
         train_data=list(train_files),
         eval_data=list(eval_files) if eval_files else None,
@@ -145,6 +197,11 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=["examples/sample_dialog.jsonl"],
         help="One or more corpus files (text or JSONL).  Defaults to the bundled sample dataset.",
+    )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run environment checks and exit without starting training.",
     )
     parser.add_argument(
         "--val-data",
@@ -236,6 +293,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    if args.doctor:
+        run_doctor()
+        return
+
+    from model import ChatWeaverConfig
+    from train import OptimizerConfig, SchedulerConfig, run_training
+
     corpus_paths = ensure_paths(args.data)
     if args.val_data:
         ensure_paths(args.val_data)
@@ -247,7 +311,7 @@ def main() -> None:
     )
 
     vocab_size = spm.SentencePieceProcessor(model_file=str(tokenizer_path)).vocab_size()
-    model_cfg = build_model_config(args.model_preset, vocab_size, args.context_length)
+    model_cfg = build_model_config(args.model_preset, vocab_size, args.context_length, ChatWeaverConfig)
 
     train_cfg = build_training_config(args.data, tokenizer_path, output_dir, args)
 

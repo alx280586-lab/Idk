@@ -31,7 +31,29 @@ quantization.
    pip install -r requirements.txt
    ```
 
-2. **Run the guided training wizard** (uses the bundled toy dataset by default):
+   If PyTorch is missing, choose a wheel for your platform, e.g.:
+
+   ```bash
+   # CPU-only
+   pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+   # NVIDIA GPUs (CUDA 12.1)
+   pip install torch --index-url https://download.pytorch.org/whl/cu121
+   ```
+
+   See [TRAINING_GUIDE.md](TRAINING_GUIDE.md#install-pytorch) for additional wheel
+   links and troubleshooting tips.
+
+2. **Verify your environment**
+
+   ```bash
+   python quickstart.py --doctor
+   ```
+
+   This prints the detected Python, PyTorch, and SentencePiece versions and points
+   out anything missing before you launch training.
+
+3. **Run the guided training wizard** (uses the bundled toy dataset by default):
 
    ```bash
    python quickstart.py --model-preset mini --max-steps 50
@@ -42,7 +64,7 @@ quantization.
    `--model-preset full` when you are ready for the 4B configuration and have
    enough compute.
 
-3. **Chat with a checkpoint**
+4. **Chat with a checkpoint**
 
    ```bash
    python chat.py --checkpoint checkpoints/chatweaver-4b/last.pt \
