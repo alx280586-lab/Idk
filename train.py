@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import os
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
@@ -21,6 +22,8 @@ try:
     import sentencepiece as spm
 except ImportError as exc:  # pragma: no cover - runtime check
     raise ImportError("sentencepiece is required for training") from exc
+
+from tempfile import TemporaryDirectory
 
 
 @dataclass
@@ -202,8 +205,11 @@ class Trainer:
         self.fsdp = fsdp
 
     def _autocast_dtype(self) -> torch.dtype:
-        if self.precision.lower() == "bf16":
+        precision = self.precision.lower()
+        if precision in {"bf16", "bfloat16"}:
             return torch.bfloat16
+        if precision in {"fp32", "float32"}:
+            return torch.float32
         return torch.float16
 
     def train(
@@ -217,7 +223,9 @@ class Trainer:
         max_grad_norm: float,
         resume_step: int = 0,
     ) -> None:
-        scaler = torch.cuda.amp.GradScaler(enabled=self.precision.lower() == "fp16")
+        use_cuda = self.device.type == "cuda"
+        precision = self.precision.lower()
+        scaler = torch.cuda.amp.GradScaler(enabled=use_cuda and precision in {"fp16", "float16"})
         autocast_dtype = self._autocast_dtype()
 
         self.global_step = resume_step
@@ -226,7 +234,11 @@ class Trainer:
         for step, batch in enumerate(self.train_loader):
             self.model.train()
             batch = {k: v.to(self.device) for k, v in batch.items() if k != "lengths"}
-            with torch.autocast(device_type=self.device.type, dtype=autocast_dtype):
+            if use_cuda and autocast_dtype != torch.float32:
+                autocast_cm = torch.autocast(device_type=self.device.type, dtype=autocast_dtype)
+            else:
+                autocast_cm = nullcontext()
+            with autocast_cm:
                 outputs = self.model(batch["input_ids"], attention_mask=batch["attention_mask"])
                 logits = outputs["logits"][:, :-1, :]
                 labels = batch["labels"][:, 1:]
@@ -405,14 +417,12 @@ def prepare_dataloaders(cfg: TrainingConfig, tokenizer: spm.SentencePieceProcess
     return train_loader, eval_loader
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Train ChatWeaver-4B")
-    parser.add_argument("--config", default="config.yaml", help="Path to YAML config file.")
-    args = parser.parse_args()
-
-    setup_distributed()
-    model_cfg, train_cfg, optim_cfg, sched_cfg = load_config(args.config)
-
+def run_training(
+    model_cfg: ChatWeaverConfig,
+    train_cfg: TrainingConfig,
+    optim_cfg: OptimizerConfig,
+    sched_cfg: SchedulerConfig,
+) -> None:
     tokenizer = spm.SentencePieceProcessor(model_file=train_cfg.tokenizer_path)
 
     model = build_model(model_cfg.__dict__)
@@ -466,6 +476,115 @@ def main() -> None:
         max_grad_norm=optim_cfg.max_grad_norm,
         resume_step=resume_step,
     )
+
+
+def run_demo() -> None:
+    """Run a tiny end-to-end training demonstration on CPU."""
+
+    with TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        corpus_path = tmp_path / "demo_corpus.txt"
+        corpus_path.write_text(
+            "\n".join(
+                [
+                    "Hello there! How can I assist you today?",
+                    "Please help me plan dinner.",
+                    "Sure, let's make pasta with a simple salad.",
+                    "Thank you so much!",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        spm.SentencePieceTrainer.train(
+            input=str(corpus_path),
+            model_prefix=str(tmp_path / "chatweaver_demo"),
+            vocab_size=256,
+            character_coverage=1.0,
+            model_type="bpe",
+            pad_id=0,
+            unk_id=1,
+            bos_id=2,
+            eos_id=3,
+        )
+
+        demo_data = [
+            {
+                "instruction": "You are a helpful assistant.",
+                "input": "User: What's a quick breakfast?",
+                "output": "Assistant: Toast with avocado and a boiled egg is fast and tasty.",
+            },
+            {
+                "instruction": "You are a helpful assistant.",
+                "input": "User: Share a study tip.",
+                "output": "Assistant: Break topics into small goals and review regularly.",
+            },
+            {
+                "instruction": "You are a helpful assistant.",
+                "input": "User: I need a thank you note.",
+                "output": "Assistant: Thank you for your guidance—your help made the project a success!",
+            },
+        ]
+
+        data_path = tmp_path / "demo.jsonl"
+        with data_path.open("w", encoding="utf-8") as fp:
+            for record in demo_data:
+                fp.write(json.dumps(record) + "\n")
+
+        tokenizer_path = str(tmp_path / "chatweaver_demo.model")
+        output_dir = tmp_path / "demo_runs"
+
+        model_cfg = ChatWeaverConfig(
+            vocab_size=256,
+            context_length=128,
+            hidden_size=256,
+            intermediate_size=1024,
+            num_attention_heads=8,
+            num_key_value_heads=4,
+            num_layers=4,
+            dropout=0.0,
+            activation_dropout=0.0,
+            gradient_checkpointing=False,
+            use_flash_attention=False,
+        )
+
+        train_cfg = TrainingConfig(
+            train_data=[str(data_path)],
+            eval_data=[str(data_path)],
+            tokenizer_path=tokenizer_path,
+            output_dir=str(output_dir),
+            batch_size=2,
+            micro_batch_size=2,
+            max_steps=2,
+            save_interval=2,
+            eval_interval=2,
+            log_interval=1,
+            precision="fp32",
+            seed=42,
+        )
+
+        optim_cfg = OptimizerConfig(lr=5e-4, weight_decay=0.0)
+        sched_cfg = SchedulerConfig(warmup_steps=1, total_steps=2, min_lr_ratio=0.5)
+
+        print("Running demo training on a tiny synthetic dataset...")
+        run_training(model_cfg, train_cfg, optim_cfg, sched_cfg)
+        print(f"Demo artifacts saved under: {output_dir}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train ChatWeaver-4B")
+    parser.add_argument("--config", default="config.yaml", help="Path to YAML config file.")
+    parser.add_argument("--demo", action="store_true", help="Run a quick CPU demo training loop.")
+    args = parser.parse_args()
+
+    if args.demo:
+        run_demo()
+        return
+
+    setup_distributed()
+    model_cfg, train_cfg, optim_cfg, sched_cfg = load_config(args.config)
+
+    run_training(model_cfg, train_cfg, optim_cfg, sched_cfg)
 
 
 if __name__ == "__main__":

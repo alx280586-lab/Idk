@@ -31,6 +31,13 @@ model optimized for consumer GPUs.
    python train.py --config config.yaml
    ```
 
+   Need a sanity check without massive hardware? Run the built-in CPU demo to
+   exercise the full pipeline on a toy dataset:
+
+   ```bash
+   python train.py --demo
+   ```
+
 3. **Chat with a checkpoint**
 
    ```bash
