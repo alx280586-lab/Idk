@@ -1,0 +1,11 @@
+model:
+  name: llama3-local
+  path: ./models/llama3
+  max_tokens: 256
+memory:
+  db_path: ./mycelium_roblox/memory.db
+logging:
+  level: INFO
+tools:
+  roblox_api_dump: ./data/roblox_api.json
+  sandbox_timeout: 5
