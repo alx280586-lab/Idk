@@ -59,8 +59,8 @@ class FNCWorker(nn.Module):
             )
             for i in range(cfg.n_layers)
         ])
-        ln_spec = ("ln_final", cfg.n_layers, -1, 1, cfg.d_model)
-        lm_spec = ("lm_head", 0, -1, cfg.d_model, cfg.vocab_size)
+        ln_spec = ("ln_final", cfg.n_layers, 0, cfg.d_model, 1)
+        lm_spec = ("lm_head", 0, 0, cfg.d_model, cfg.vocab_size)
         self.ln_proxy = FNCParamProxy(
             ln_spec,
             seeds.seed_for(ln_spec),
@@ -85,7 +85,7 @@ class FNCWorker(nn.Module):
         for block, plan in zip(self.layers, simple_routing_plan(tokens.size(1), self.cfg.n_layers)):
             hidden = block(hidden, plan)
         ln_weight = self.ln_proxy.materialize()
-        hidden = procedural_layernorm(hidden, ln_weight)
+        hidden = procedural_layernorm(hidden, ln_weight.squeeze())
         logits_weight = self.lm_proxy.materialize()
         logits = hidden @ logits_weight
         return logits
@@ -102,15 +102,15 @@ class ProceduralBlock(nn.Module):
         self.cache = cache
         self.precision = precision
         self.seeds = seeds
-        self.q_proxy = self._create_proxy("attn_q_proj")
-        self.k_proxy = self._create_proxy("attn_k_proj")
-        self.v_proxy = self._create_proxy("attn_v_proj")
-        self.o_proxy = self._create_proxy("attn_out_proj")
-        self.ff1_proxy = self._create_proxy("mlp_fc1")
-        self.ff2_proxy = self._create_proxy("mlp_fc2")
+        self.q_proxy = self._create_proxy("attn_q_proj", d_model, d_model)
+        self.k_proxy = self._create_proxy("attn_k_proj", d_model, d_model)
+        self.v_proxy = self._create_proxy("attn_v_proj", d_model, d_model)
+        self.o_proxy = self._create_proxy("attn_out_proj", d_model, d_model)
+        self.ff1_proxy = self._create_proxy("mlp_fc1", d_model, d_model)
+        self.ff2_proxy = self._create_proxy("mlp_fc2", d_model, d_model)
 
-    def _create_proxy(self, block_type: str) -> FNCParamProxy:
-        spec = (block_type, self.layer_id, -1, self.d_model, self.d_model)
+    def _create_proxy(self, block_type: str, rows: int, cols: int) -> FNCParamProxy:
+        spec = (block_type, self.layer_id, 0, rows, cols)
         seed = self.seeds.seed_for(spec)
         return FNCParamProxy(spec, seed, self.coord_encoder, self.generator, self.cache, self.precision)
 

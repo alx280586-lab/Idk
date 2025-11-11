@@ -9,6 +9,7 @@ import math
 import pickle
 import random
 from contextlib import contextmanager
+import builtins
 from itertools import product
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
@@ -20,6 +21,7 @@ __all__ = [
     "linspace",
     "logspace",
     "randn",
+    "randint",
     "stack",
     "meshgrid",
     "cat",
@@ -27,7 +29,9 @@ __all__ = [
     "cos",
     "exp",
     "sqrt",
+    "tanh",
     "softmax",
+    "zeros_like",
     "prod",
     "clamp",
     "allclose",
@@ -39,10 +43,13 @@ __all__ = [
     "no_grad",
     "float32",
     "long",
+    "int64",
+    "round",
 ]
 
 float32 = "float32"
 long = "long"
+int64 = "int64"
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +430,7 @@ class Tensor:
         return _apply_unary(self, abs)
 
     def round(self) -> "Tensor":
-        return _apply_unary(self, round)
+        return _apply_unary(self, builtins.round)
 
     def clamp(self, min: Optional[float] = None, max: Optional[float] = None) -> "Tensor":
         def _clamp(x: float) -> float:
@@ -550,6 +557,12 @@ def ensure_tensor(value: Any, shape: Tuple[int, ...]) -> Tensor:
 
 
 def tensor(data: Any, dtype=None, device=None) -> Tensor:  # noqa: ARG001 - dtype/device unused
+    if dtype in {int64, long}:
+        if isinstance(data, (list, tuple)):
+            converted = [int(x) for x in data]
+        else:
+            converted = int(data)
+        return Tensor(converted)
     return Tensor(data)
 
 
@@ -561,8 +574,17 @@ def ones(*shape: int, dtype=None) -> Tensor:  # noqa: ARG001 - dtype ignored
     return Tensor([1.0] * _numel(shape), shape=tuple(shape))
 
 
+def zeros_like(other: Tensor) -> Tensor:
+    return zeros(*other.shape)
+
+
 def randn(*shape: int) -> Tensor:
     return Tensor([_rng.gauss(0.0, 1.0) for _ in range(_numel(shape))], shape=tuple(shape))
+
+
+def randint(low: int, high: int, shape: Tuple[int, ...], generator=None) -> Tensor:  # noqa: D401 - match torch signature loosely
+    del generator
+    return Tensor([_rng.randrange(low, high) for _ in range(_numel(shape))], shape=tuple(shape))
 
 
 _rng = random.Random(0)
@@ -664,6 +686,10 @@ def exp(t: Tensor) -> Tensor:
 
 def sqrt(t: Tensor) -> Tensor:
     return _apply_unary(t, math.sqrt)
+
+
+def tanh(t: Tensor) -> Tensor:
+    return _apply_unary(t, math.tanh)
 
 
 def softmax(t: Tensor, dim: int = -1) -> Tensor:
@@ -798,6 +824,15 @@ class ReLU(Module):
         return _apply_unary(x, lambda v: max(v, 0.0))
 
 
+class SiLU(Module):
+    def forward(self, x: Tensor) -> Tensor:
+        def _silu(value: float) -> float:
+            clamped = max(min(value, 20.0), -20.0)
+            return value / (1.0 + math.exp(-clamped))
+
+        return _apply_unary(x, _silu)
+
+
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
         super().__init__()
@@ -921,6 +956,10 @@ class FunctionalNamespace:
             losses.append(-math.log(row[int(idx)] + 1e-9))
         return Tensor(sum(losses) / len(losses))
 
+    @staticmethod
+    def gelu(tensor: Tensor) -> Tensor:
+        return _apply_unary(tensor, lambda x: 0.5 * x * (1.0 + math.erf(x / math.sqrt(2.0))))
+
 
 class UtilsNamespace:
     @staticmethod
@@ -932,6 +971,7 @@ class NNNamespace:
     Module = Module
     Linear = Linear
     ReLU = ReLU
+    SiLU = SiLU
     Sequential = Sequential
     Embedding = Embedding
     ModuleList = ModuleList
@@ -1001,6 +1041,10 @@ def relu(t: Tensor) -> Tensor:
     return _apply_unary(t, lambda x: max(x, 0.0))
 
 
+def round(t: Tensor) -> Tensor:
+    return t.round()
+
+
 def allclose(a: Tensor, b: Tensor, atol: float = 1e-6) -> bool:
     return a.allclose(b, atol=atol)
 
@@ -1013,6 +1057,7 @@ nn_module = types.ModuleType("torch.nn")
 nn_module.Module = Module
 nn_module.Linear = Linear
 nn_module.ReLU = ReLU
+nn_module.SiLU = SiLU
 nn_module.Sequential = Sequential
 nn_module.Embedding = Embedding
 nn_module.ModuleList = ModuleList
@@ -1026,6 +1071,7 @@ functional_module.pad = FunctionalNamespace.pad
 functional_module.normalize = FunctionalNamespace.normalize
 functional_module.mse_loss = FunctionalNamespace.mse_loss
 functional_module.cross_entropy = FunctionalNamespace.cross_entropy
+functional_module.gelu = FunctionalNamespace.gelu
 sys.modules[__name__ + ".nn.functional"] = functional_module
 utils_module = types.ModuleType("torch.nn.utils")
 utils_module.clip_grad_norm_ = UtilsNamespace.clip_grad_norm_

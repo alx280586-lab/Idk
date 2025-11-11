@@ -1,0 +1,4 @@
+progression:
+  unlock_steps: [1000, 5000, 10000]
+  lod_targets: [1, 2, 3, 4]
+  quant_bits: [8, 6, 4]
