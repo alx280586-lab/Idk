@@ -759,6 +759,7 @@ class Module:
     def __init__(self) -> None:
         self._parameters: Dict[str, Parameter] = {}
         self._modules: Dict[str, Module] = {}
+        self.training: bool = True
 
     def __setattr__(self, name: str, value: Any) -> None:
         if isinstance(value, Parameter):
@@ -794,6 +795,15 @@ class Module:
 
     def forward(self, *args, **kwargs):  # pragma: no cover - interface
         raise NotImplementedError
+
+    def train(self, mode: bool = True) -> "Module":
+        self.training = mode
+        for module in self._modules.values():
+            module.train(mode)
+        return self
+
+    def eval(self) -> "Module":
+        return self.train(False)
 
 
 class Linear(Module):

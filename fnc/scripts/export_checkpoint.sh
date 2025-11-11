@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "[export_checkpoint] Placeholder export routine." > /dev/stderr
-echo "python -m fnc.training.checkpointing" > /dev/stderr
+SRC=${1:-runs/stage1/generator.pt}
+DEST=${2:-artifacts/generator.pt}
+mkdir -p "$(dirname "$DEST")"
+cp "$SRC" "$DEST"
+echo "Checkpoint exported to $DEST" > /dev/stderr

@@ -20,6 +20,15 @@ class CacheInterface:
     def evict_until(self, bytes_target: int) -> None:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def remove(self, key) -> None:  # pragma: no cover - interface
+        raise NotImplementedError
+
+    def pin(self, key) -> None:  # pragma: no cover - interface
+        raise NotImplementedError
+
+    def clear(self) -> None:  # pragma: no cover - interface
+        raise NotImplementedError
+
     def info(self) -> Dict[str, float]:  # pragma: no cover - interface
         raise NotImplementedError
 
@@ -65,6 +74,21 @@ class SimpleCache(CacheInterface):
                 self._order[victim] = None
                 continue
             del self._store[victim]
+
+    def remove(self, key) -> None:
+        self._store.pop(key, None)
+        self._order.pop(key, None)
+
+    def pin(self, key) -> None:
+        entry = self._store.get(key)
+        if entry is not None:
+            entry.pinned = True
+
+    def clear(self) -> None:
+        self._store.clear()
+        self._order.clear()
+        self.hits = 0
+        self.misses = 0
 
     def _evict_if_needed(self) -> None:
         while len(self._store) > self.max_entries:

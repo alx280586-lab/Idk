@@ -2,7 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List
+
+try:  # pragma: no cover - optional dependency
+    from omegaconf import OmegaConf  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    OmegaConf = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -12,7 +18,7 @@ class GeneratorConfig:
     num_lod: int = 1
     coord_embed_dim: int = 64
     modulation_dim: int = 32
-    quant_policy: Dict[str, Any] = field(default_factory=dict)
+    quant_policy: Dict[str, Any] = field(default_factory=lambda: {"default_bits": 8, "allow_learned": False})
 
 
 @dataclass
@@ -34,6 +40,10 @@ class TrainingConfig:
     ema_decay: float = 0.999
     seed: int = 1337
     aux_weight: float = 0.0
+    weight_decay: float = 0.01
+    lod_milestones: List[int] = field(default_factory=list)
+    distill_alpha: float = 0.5
+    epochs: int = 1
 
 
 @dataclass
@@ -89,6 +99,22 @@ class FNCConfig:
             "logging": vars(self.logging),
             "extras": self.extras,
         }
+
+    @classmethod
+    def from_file(cls, path: Path) -> "FNCConfig":
+        """Load a configuration from a YAML or JSON file using OmegaConf."""
+
+        if OmegaConf is None:
+            if path.suffix == ".json":
+                import json
+
+                payload = json.loads(path.read_text())
+                return cls.from_dict(payload)
+            raise ImportError("OmegaConf is required to load non-JSON config files")
+        conf = OmegaConf.load(path)
+        payload = OmegaConf.to_container(conf, resolve=True)
+        assert isinstance(payload, dict)
+        return cls.from_dict(payload)
 
 
 __all__ = [

@@ -6,7 +6,7 @@ from typing import Dict
 
 def maybe_unlock_next_lod(step: int, generator_G, cfg) -> bool:
     """Increase generator LoD based on milestones."""
-    milestones = cfg.training.get("lod_milestones", [])
+    milestones = cfg.training.lod_milestones
     if step in milestones and generator_G.num_lod < cfg.generator.num_lod:
         generator_G.num_lod += 1
         return True

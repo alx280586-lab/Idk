@@ -11,7 +11,7 @@ from fnc.training.trainer_meta import meta_train_step
 def run_stage3(dataloader, teacher_model, model_W, generator_G, optimizer, precision_ctrl, cfg) -> Dict[str, float]:
     """Run distillation by mixing teacher logits into the loss."""
     metrics: Dict[str, float] = {}
-    alpha = cfg.training.get("distill_alpha", 0.5)
+    alpha = cfg.training.distill_alpha
     for batch in dataloader:
         tokens, targets = batch
         with torch.no_grad():

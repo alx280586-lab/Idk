@@ -67,27 +67,22 @@ class FNCParamProxy(nn.Module):
         context: Dict = {"block_type": self.block_spec[0], "shape": tuple(self.shape)}
         output = self.generator(self.seed, coords.unsqueeze(0), context)
         weights = output["weights"][0]
-        quantized = self.precision.quantize(weights, self.block_spec[0])
+        quantized = self.precision.quantize(weights, self.block_spec[0], training=self.training)
         reshaped = self._reshape(quantized)
+        cached = reshaped.detach()
+        self.cache.insert(key, cached, cost=float(cached.numel() * cached.element_size()))
         if device:
             reshaped = reshaped.to(device)
-        self.cache.insert(key, reshaped, cost=float(reshaped.numel() * reshaped.element_size()))
         self.stats_state.materialisations += 1
         return reshaped
 
     def evict(self) -> None:
         key = tuple(self.block_spec)
-        if hasattr(self.cache, "_store"):
-            self.cache._store.pop(key, None)  # type: ignore[attr-defined]
-        if hasattr(self.cache, "_order"):
-            self.cache._order.pop(key, None)  # type: ignore[attr-defined]
+        self.cache.remove(key)
 
     def pin(self) -> None:
         key = tuple(self.block_spec)
-        if hasattr(self.cache, "_store"):
-            entry = self.cache._store.get(key)  # type: ignore[attr-defined]
-            if entry is not None:
-                entry.pinned = True
+        self.cache.pin(key)
 
     def stats(self) -> Dict[str, int]:
         return {

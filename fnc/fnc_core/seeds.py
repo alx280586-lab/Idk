@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
 
+import ast
+
 import torch
 
 
@@ -25,6 +27,10 @@ class SeedRegistry:
     def as_dict(self) -> Dict[str, int]:
         """Expose a serialisable mapping."""
         return {str(key): value for key, value in self._table.items()}
+
+    def load_state(self, payload: Dict[str, int]) -> None:
+        """Restore the registry from a serialised mapping."""
+        self._table = {tuple(ast.literal_eval(key)): value for key, value in payload.items()}
 
 
 __all__ = ["SeedRegistry"]
