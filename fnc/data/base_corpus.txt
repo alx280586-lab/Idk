@@ -1,0 +1,4 @@
+Fractal neural compression unlocks procedural weight generation by coupling a compact generator network with deterministic seeds.
+The worker transformer requests parameter blocks lazily, allowing massive virtual models to stream through constrained memory budgets.
+Meta-training optimises the generator so regenerated weights remain coherent, reusable, and stable under quantisation policies.
+This base corpus is intentionally small and repetitive, providing a quick sanity target for Stage 1 training runs.
