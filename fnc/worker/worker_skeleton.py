@@ -12,6 +12,7 @@ from fnc.fnc_core.tensor_coords import CoordinateEncoder
 from fnc.fnc_core.caching import CacheInterface
 from fnc.fnc_core.seeds import SeedRegistry
 from fnc.worker.fnc_param_proxy import FNCParamProxy
+from fnc.worker.embedding import ProceduralEmbedding
 from fnc.worker.routing import simple_routing_plan
 from fnc.worker.attention import procedural_attention_forward
 from fnc.worker.mlp import procedural_mlp_forward
@@ -46,7 +47,15 @@ class FNCWorker(nn.Module):
         self.precision = precision
         self.seeds = seeds
         self.coord_encoder = CoordinateEncoder(embed_dim=generator.coord_embed_dim)
-        self.embed_tokens = nn.Embedding(cfg.vocab_size, cfg.d_model)
+        self.embed_tokens = ProceduralEmbedding(
+            cfg.vocab_size,
+            cfg.d_model,
+            generator,
+            self.coord_encoder,
+            cache,
+            precision,
+            seeds,
+        )
         self.layers = nn.ModuleList([
             ProceduralBlock(
                 layer_id=i,

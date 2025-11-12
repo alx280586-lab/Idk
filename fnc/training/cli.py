@@ -5,10 +5,21 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-from loguru import logger
+try:  # pragma: no cover - optional dependency fallback
+    from loguru import logger
+except ImportError:  # pragma: no cover - fallback path for minimal environments
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 from fnc.fnc_core.config import FNCConfig
 from fnc.fnc_core.model_stats import estimate_worker_params
+from fnc.training.init_model import initialise_model_bundle
 from fnc.training.pipeline import (
     build_training_bundle,
     run_distillation,
@@ -80,6 +91,18 @@ def estimate(
     typer.echo(f"Virtual parameters  : {footprint.virtual_params:,}")
     typer.echo(f"Bytes per block     : {footprint.bytes_per_block:,.0f}")
     typer.echo(f"Cache working set   : {footprint.cache_bytes:,.0f}")
+
+
+@app.command()
+def init(
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file to load."),
+    output: Path = typer.Option(Path("bundles/untrained"), help="Directory where the untrained bundle will be stored."),
+) -> None:
+    """Initialise an untrained FNC bundle without running optimisation."""
+
+    cfg = _load_config(config)
+    checkpoint_path = initialise_model_bundle(cfg, output)
+    typer.echo(f"Initialised bundle saved to {checkpoint_path}")
 
 
 if __name__ == "__main__":  # pragma: no cover

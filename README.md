@@ -129,7 +129,36 @@ python -m fnc.training.cli estimate --config configs/ten_trillion.yaml
 
 Use `--lod` to inspect hypothetical unlock levels without editing the config.
 
-### 5. Run inference
+### 5. Initialise an untrained mega-scale bundle
+
+If you want to *create* the 10-trillion-parameter equivalent model without
+running any optimisation, invoke the new `init` command. It instantiates the
+generator, seeds, cache metadata, and worker topology, then saves everything in
+an inference-ready bundle. No gradient steps are executed.
+
+```bash
+./fnc/scripts/init_model.sh
+```
+
+By default this targets `configs/ten_trillion.yaml` and writes the bundle to
+`bundles/ten_trillion_untrained/generator.pt`. Supply alternative paths to the
+script if you would like to initialise a different configuration:
+
+```bash
+./fnc/scripts/init_model.sh configs/base.yaml bundles/base_untrained
+```
+
+You can also call the underlying Typer CLI directly:
+
+```bash
+python -m fnc.training.cli init --config configs/ten_trillion.yaml --output bundles/ten_trillion_untrained
+```
+
+The resulting checkpoint stores the generator weights, deterministic seed
+table, precision policy, and a footprint summary so you can immediately load it
+with `fnc.inference.generate`.
+
+### 6. Run inference
 
 Use the saved bundle with the text generation CLI. The script prints the sampled
 output together with cache hit rates and latency:
@@ -143,7 +172,7 @@ policy, and seed registry captured during training. Override configuration
 fields with `--config` if you need to run on different hardware at inference
 time.
 
-### 6. Host a pre-trained GPT-2 checkpoint
+### 7. Host a pre-trained GPT-2 checkpoint
 
 FNC can also host an existing Hugging Face GPT-2 checkpoint without re-training
 the fractal generator. Install the optional dependency and export the static
@@ -165,7 +194,7 @@ If the tokenizer metadata is available in the bundle, the CLI will automatically
 reuse it. Otherwise it falls back to the byte-level tokenizer shipped with the
 repository.
 
-### 7. Export checkpoints
+### 8. Export checkpoints
 
 To copy the trained generator checkpoint into a portable location:
 

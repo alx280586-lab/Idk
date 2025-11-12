@@ -7,7 +7,17 @@ from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple
 
 import torch
-from loguru import logger
+try:  # pragma: no cover - optional dependency fallback
+    from loguru import logger
+except ImportError:  # pragma: no cover - fallback path for minimal environments
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 from fnc.fnc_core.caching import SimpleCache
 from fnc.fnc_core.config import FNCConfig
@@ -57,7 +67,9 @@ def build_training_bundle(cfg: FNCConfig) -> TrainingBundle:
 
     init_seed(cfg.training.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    generator = FractalGenerator(cfg.generator).to(device)
+    generator = FractalGenerator(cfg.generator)
+    if hasattr(generator, "to"):
+        generator = generator.to(device)
     precision = PrecisionPolicy(
         default_bits=cfg.generator.quant_policy.get("default_bits", 8),
         overrides=cfg.generator.quant_policy.get("overrides"),
@@ -75,11 +87,13 @@ def build_training_bundle(cfg: FNCConfig) -> TrainingBundle:
         max_seq_len=cfg.model.max_seq_len,
         mlp_ratio=cfg.model.mlp_ratio,
     )
-    worker = FNCWorker(worker_cfg, generator, cache, precision, seeds).to(device)
+    worker = FNCWorker(worker_cfg, generator, cache, precision, seeds)
+    if hasattr(worker, "to"):
+        worker = worker.to(device)
     dataset, tokenizer = _resolve_dataset(cfg)
     logger.info("Training bundle ready on %s with vocab %d", device, dataset.vocab_size)
     return TrainingBundle(
-        cfg=cfg,
+        config=cfg,
         generator=generator,
         worker=worker,
         cache=cache,

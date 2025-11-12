@@ -47,8 +47,15 @@ class TextDataset:
     def from_text(cls, text: str, tokenizer: Optional[ByteTokenizer] = None, seed: int = 0) -> "TextDataset":
         tokenizer = tokenizer or ByteTokenizer()
         tokens = tokenizer.encode(text)
-        vocab_size = max(tokenizer.vocab_size, int(tokens.max().item()) + 1 if tokens.numel() else tokenizer.vocab_size)
-        return cls(vocab_size=vocab_size, length=len(tokens), seed=seed, tokens=tokens)
+        if tokens.numel():
+            max_token = tokens.max()
+            max_token_value = max_token.item() if hasattr(max_token, "item") else float(max_token)
+            derived_vocab = int(max_token_value) + 1
+        else:
+            derived_vocab = tokenizer.vocab_size
+        vocab_size = max(tokenizer.vocab_size, derived_vocab)
+        length = int(tokens.numel()) if hasattr(tokens, "numel") else len(tokens)
+        return cls(vocab_size=vocab_size, length=length, seed=seed, tokens=tokens)
 
     @classmethod
     def from_file(cls, path: Path, tokenizer: Optional[ByteTokenizer] = None, seed: int = 0) -> "TextDataset":

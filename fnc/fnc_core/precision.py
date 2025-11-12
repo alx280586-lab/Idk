@@ -33,5 +33,20 @@ class PrecisionPolicy:
             return tensor + (quantized - tensor).detach()
         return quantized
 
+    def as_dict(self) -> Dict[str, int | Dict[str, int]]:
+        """Return a serialisable snapshot of the precision configuration."""
+
+        return {"default_bits": int(self.default_bits), "overrides": self.overrides or {}}
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, int | Dict[str, int]] | None) -> "PrecisionPolicy":
+        """Rebuild a :class:`PrecisionPolicy` from a mapping."""
+
+        payload = payload or {}
+        default_bits = int(payload.get("default_bits", 8))
+        overrides = payload.get("overrides")
+        overrides = overrides if isinstance(overrides, dict) else None
+        return cls(default_bits=default_bits, overrides=overrides)
+
 
 __all__ = ["PrecisionPolicy"]

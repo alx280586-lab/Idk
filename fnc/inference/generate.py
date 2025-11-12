@@ -42,10 +42,7 @@ def _restore_from_bundle(bundle: Path, cfg_override: Optional[FNCConfig]) -> tup
     generator = FractalGenerator(cfg.generator)
     generator.load_state_dict(state.get("model", {}))
     precision_state = state.get("precision", {})
-    precision = PrecisionPolicy(
-        default_bits=precision_state.get("default_bits", cfg.generator.quant_policy.get("default_bits", 8)),
-        overrides=precision_state.get("overrides"),
-    )
+    precision = PrecisionPolicy.from_dict(precision_state)
     seeds = SeedRegistry(cfg.training.seed)
     if "seeds" in state:
         seeds.load_state(state["seeds"])
