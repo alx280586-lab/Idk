@@ -14,15 +14,20 @@ class SpectralFieldDecoder(nn.Module):
 
     def __init__(self, cfg) -> None:
         super().__init__()
-        self.output_dim = cfg.latent_dim
+        self.latent_dim = cfg.latent_dim
+        self.coord_dim = cfg.coord_embed_dim
         self.layers = nn.Sequential(
-            nn.Linear(cfg.latent_dim, cfg.latent_dim),
+            nn.Linear(cfg.latent_dim + cfg.coord_embed_dim, cfg.latent_dim),
             nn.SiLU(),
             nn.Linear(cfg.latent_dim, cfg.latent_dim),
         )
 
-    def forward(self, latent: torch.Tensor, context: Dict) -> torch.Tensor:
-        enriched = latent + fractional_brownian_motion(latent)
+    def forward(self, latent: torch.Tensor, coords: torch.Tensor, context: Dict) -> torch.Tensor:
+        if coords.dim() == 1:
+            coords = coords.unsqueeze(0)
+        coords = coords[:, : self.coord_dim].to(latent.device)
+        fused = torch.cat([latent, coords], dim=-1)
+        enriched = fused + fractional_brownian_motion(fused)
         return self.layers(enriched)
 
 

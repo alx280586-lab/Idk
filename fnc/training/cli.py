@@ -8,6 +8,7 @@ import typer
 from loguru import logger
 
 from fnc.fnc_core.config import FNCConfig
+from fnc.fnc_core.model_stats import estimate_worker_params
 from fnc.training.pipeline import (
     build_training_bundle,
     run_distillation,
@@ -61,6 +62,24 @@ def distill(
     bundle = build_training_bundle(cfg)
     metrics = run_distillation(bundle, epochs=epochs, max_steps=steps, checkpoint_dir=checkpoint_dir)
     logger.info("Distillation complete: %s", metrics)
+
+
+@app.command()
+def estimate(
+    config: Optional[Path] = typer.Option(None, help="Config file to load."),
+    lod: Optional[int] = typer.Option(None, help="Override generator LoD when computing the virtual parameter count."),
+) -> None:
+    """Print the theoretical parameter footprint for the configured worker."""
+
+    cfg = _load_config(config)
+    if lod is not None:
+        cfg.generator.num_lod = lod
+    footprint = estimate_worker_params(cfg)
+    typer.echo("=== Worker Footprint ===")
+    typer.echo(f"Physical parameters : {footprint.total_params:,}")
+    typer.echo(f"Virtual parameters  : {footprint.virtual_params:,}")
+    typer.echo(f"Bytes per block     : {footprint.bytes_per_block:,.0f}")
+    typer.echo(f"Cache working set   : {footprint.cache_bytes:,.0f}")
 
 
 if __name__ == "__main__":  # pragma: no cover

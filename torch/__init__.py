@@ -137,6 +137,18 @@ def _unflatten(data: List[float], shape: Tuple[int, ...]) -> Any:
     ]
 
 
+def _cat_nested(arrays: List[Any], dim: int) -> Any:
+    if dim == 0:
+        result: List[Any] = []
+        for arr in arrays:
+            result.extend(arr)
+        return result
+    if not arrays:
+        return []
+    length = len(arrays[0])
+    return [_cat_nested([arr[i] for arr in arrays], dim - 1) for i in range(length)]
+
+
 def _apply_binary(a: "Tensor", b: "Tensor", op) -> "Tensor":
     if a.shape == b.shape:
         return Tensor([op(x, y) for x, y in zip(a._data, b._data)], shape=a.shape)
@@ -627,14 +639,29 @@ def stack(tensors: Sequence[Tensor], dim: int = 0) -> Tensor:
 
 def cat(tensors: Sequence[Tensor], dim: int = 0) -> Tensor:
     tensors = [tensor(t) for t in tensors]
-    if dim != 0:
-        raise NotImplementedError("cat stub only supports dim=0")
-    data = []
-    total = 0
-    for t in tensors:
-        data.extend(t._data)
-        total += t.shape[0]
-    return Tensor(data, shape=(total,))
+    if not tensors:
+        raise ValueError("cat expects at least one tensor")
+    rank = len(tensors[0].shape)
+    if rank == 0:
+        raise NotImplementedError("cat stub does not support scalars")
+    dim = dim if dim >= 0 else rank + dim
+    if not 0 <= dim < rank:
+        raise ValueError("Invalid cat dimension")
+    base_shape = tensors[0].shape
+    for t in tensors[1:]:
+        if len(t.shape) != rank:
+            raise ValueError("All tensors must have the same rank")
+        for axis, (a, b) in enumerate(zip(base_shape, t.shape)):
+            if axis == dim:
+                continue
+            if a != b:
+                raise ValueError("Tensor shapes must match except along cat dimension")
+    nested = [_unflatten(t._data, t.shape) for t in tensors]
+    concatenated = _cat_nested(nested, dim)
+    new_shape = list(base_shape)
+    new_shape[dim] = sum(t.shape[dim] for t in tensors)
+    data = _flatten(concatenated)
+    return Tensor(data, shape=tuple(new_shape))
 
 
 def meshgrid(*tensors: Tensor, indexing: str = "ij") -> Tuple[Tensor, ...]:

@@ -64,13 +64,18 @@ class FNCParamProxy(nn.Module):
             return cached.to(device) if device else cached
         self.stats_state.misses += 1
         coords = self.coord_encoder.encode(self.block_spec)
-        context: Dict = {"block_type": self.block_spec[0], "shape": tuple(self.shape)}
+        context: Dict = {
+            "block_type": self.block_spec[0],
+            "shape": tuple(self.shape),
+            "lod": getattr(self.generator, "num_lod", 1),
+        }
         output = self.generator(self.seed, coords.unsqueeze(0), context)
         weights = output["weights"][0]
         quantized = self.precision.quantize(weights, self.block_spec[0], training=self.training)
         reshaped = self._reshape(quantized)
         cached = reshaped.detach()
-        self.cache.insert(key, cached, cost=float(cached.numel() * cached.element_size()))
+        footprint = float(cached.numel() * max(1, self.precision.bits_for(self.block_spec[0])) / 8)
+        self.cache.insert(key, cached, cost=footprint)
         if device:
             reshaped = reshaped.to(device)
         self.stats_state.materialisations += 1

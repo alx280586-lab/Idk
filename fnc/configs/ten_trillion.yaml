@@ -1,0 +1,32 @@
+model:
+  d_model: 8192
+  n_layers: 1152
+  n_heads: 64
+  vocab_size: 131072
+  max_seq_len: 4096
+generator:
+  latent_dim: 2048
+  spectral_bases: ["fourier", "wavelet", "chebyshev"]
+  num_lod: 24
+  coord_embed_dim: 256
+  modulation_dim: 192
+  quant_policy:
+    default_bits: 4
+    allow_learned: true
+runtime:
+  cache_bytes_gpu: 2_500_000_000
+  cache_bytes_cpu: 24_000_000_000
+  prefetch_window: 8
+  device_budget: "auto"
+training:
+  optimizer: "adamw"
+  lr: 5e-5
+  warmup_steps: 4000
+  batch_tokens: 524288
+  grad_clip: 1.0
+  precision: "bf16"
+  ema_decay: 0.9995
+  seed: 2024
+  lod_milestones: [500, 2000, 5000, 10000, 20000, 40000, 80000, 160000]
+logging:
+  wandb: false

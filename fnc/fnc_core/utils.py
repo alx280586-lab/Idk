@@ -4,14 +4,18 @@ from __future__ import annotations
 import random
 from typing import Iterable, Sequence
 
-import numpy as np
+try:  # pragma: no cover - optional dependency in tests
+    import numpy as np
+except ImportError:  # pragma: no cover - optional dependency in tests
+    np = None  # type: ignore[assignment]
 import torch
 
 
 def init_seed(seed: int) -> None:
     """Initialise Python, NumPy, and Torch RNGs with the same seed."""
     random.seed(seed)
-    np.random.seed(seed)
+    if np is not None:
+        np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():  # pragma: no cover - depends on hardware
         torch.cuda.manual_seed_all(seed)

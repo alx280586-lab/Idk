@@ -9,7 +9,8 @@ def test_generator_output_shape():
     generator = FractalGenerator(cfg.generator)
     seed = torch.tensor([[1]])
     coords = torch.zeros(1, cfg.generator.coord_embed_dim)
-    context = {"lod": 1}
+    context = {"lod": 2, "shape": (8, 8)}
     result = generator(seed, coords, context)
     assert "weights" in result
-    assert result["weights"].shape[0] == 1
+    assert result["weights"].shape == (1, 8, 8)
+    assert result["aux"]["lod_used"] == 2

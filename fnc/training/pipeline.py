@@ -62,7 +62,10 @@ def build_training_bundle(cfg: FNCConfig) -> TrainingBundle:
         default_bits=cfg.generator.quant_policy.get("default_bits", 8),
         overrides=cfg.generator.quant_policy.get("overrides"),
     )
-    cache = SimpleCache(max_entries=max(8, cfg.runtime.prefetch_window * 4))
+    cache = SimpleCache(
+        max_entries=max(8, cfg.runtime.prefetch_window * 4),
+        max_bytes=getattr(cfg.runtime, "cache_bytes_gpu", None),
+    )
     seeds = SeedRegistry(cfg.training.seed)
     worker_cfg = WorkerConfig(
         d_model=cfg.model.d_model,

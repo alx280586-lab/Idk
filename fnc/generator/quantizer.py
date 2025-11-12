@@ -18,7 +18,9 @@ class QuantisationHead(nn.Module):
 
     def forward(self, context: Dict) -> Dict[str, float]:
         lod = float(context.get("lod", 1))
-        stats = self.fc(torch.tensor([[lod, lod**2, 1.0, 0.5]])).squeeze(0)
+        device = next(self.fc.parameters()).device
+        basis = torch.tensor([[lod, lod**2, 1.0, 0.5]], device=device)
+        stats = self.fc(basis).squeeze(0)
         bits = self.default_bits - float(stats.mean().item()) * 0.1 if self.allow_learned else self.default_bits
         return {"quant_bits": max(2.0, bits)}
 
