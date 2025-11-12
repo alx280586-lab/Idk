@@ -23,6 +23,7 @@ def test_worker_forward_runs():
         n_heads=cfg.model.n_heads,
         vocab_size=cfg.model.vocab_size,
         max_seq_len=8,
+        mlp_ratio=cfg.model.mlp_ratio,
     )
     worker = FNCWorker(worker_cfg, generator, cache, precision, seeds)
     tokens = torch.randint(0, worker_cfg.vocab_size, (1, worker_cfg.max_seq_len))

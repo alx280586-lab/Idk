@@ -68,6 +68,7 @@ class FNCParamProxy(nn.Module):
             "block_type": self.block_spec[0],
             "shape": tuple(self.shape),
             "lod": getattr(self.generator, "num_lod", 1),
+            "block_spec": tuple(self.block_spec),
         }
         output = self.generator(self.seed, coords.unsqueeze(0), context)
         weights = output["weights"][0]

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from pathlib import Path
 from time import perf_counter
 from typing import Optional
 
@@ -14,6 +15,7 @@ from fnc.fnc_core.precision import PrecisionPolicy
 from fnc.fnc_core.seeds import SeedRegistry
 from fnc.generator.checkpoints import load_generator_checkpoint
 from fnc.generator.generator_model import FractalGenerator
+from fnc.inference.static_generator import load_static_bundle
 from fnc.training.data import ByteTokenizer
 from fnc.worker.worker_skeleton import FNCWorker, WorkerConfig
 
@@ -84,6 +86,7 @@ def main(
         n_heads=cfg.model.n_heads,
         vocab_size=cfg.model.vocab_size,
         max_seq_len=cfg.model.max_seq_len,
+        mlp_ratio=cfg.model.mlp_ratio,
     )
     cache = SimpleCache(max_entries=max(8, cfg.runtime.prefetch_window * 4))
     worker = FNCWorker(worker_cfg, generator, cache, precision, seeds)
@@ -93,6 +96,83 @@ def main(
     stats = cache.info()
     typer.echo(f"Output: {output_text}")
     typer.echo(f"Cache hits: {int(stats['hits'])}, misses: {int(stats['misses'])}, hit_rate: {stats['hit_rate']:.2f}")
+    typer.echo(f"Latency: {duration*1000:.2f} ms for {max_new_tokens} tokens")
+
+
+@app.command("static")
+def generate_static(
+    bundle: Path = typer.Argument(..., help="Path to a static bundle exported from Hugging Face."),
+    prompt: str = typer.Option("Hello", help="Prompt to condition on."),
+    max_new_tokens: int = typer.Option(32, help="Number of tokens to generate."),
+    tokenizer_override: Optional[str] = typer.Option(
+        None, help="Optional Hugging Face tokenizer name to override bundle metadata."
+    ),
+) -> None:
+    cfg, generator, seeds, precision, extras = load_static_bundle(bundle)
+    cache = SimpleCache(max_entries=max(8, cfg.runtime.prefetch_window * 4))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    worker_cfg = WorkerConfig(
+        d_model=cfg.model.d_model,
+        n_layers=cfg.model.n_layers,
+        n_heads=cfg.model.n_heads,
+        vocab_size=cfg.model.vocab_size,
+        max_seq_len=cfg.model.max_seq_len,
+        mlp_ratio=cfg.model.mlp_ratio,
+    )
+    worker = FNCWorker(worker_cfg, generator, cache, precision, seeds).to(device)
+    embedding = extras.get("embedding")
+    if isinstance(embedding, torch.Tensor):
+        with torch.no_grad():
+            target = worker.embed_tokens.weight.data
+            rows = min(target.shape[0], embedding.shape[0])
+            cols = min(target.shape[1], embedding.shape[1])
+            target[:rows, :cols] = embedding[:rows, :cols]
+    tokenizer_name = tokenizer_override or (extras.get("tokenizer_name") if isinstance(extras.get("tokenizer_name"), str) else None)
+    hf_tokenizer = None
+    if tokenizer_name:
+        try:  # pragma: no cover - optional dependency
+            from transformers import AutoTokenizer  # type: ignore
+
+            hf_tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        except Exception as exc:  # pragma: no cover - optional dependency
+            typer.echo(f"Warning: failed to load tokenizer '{tokenizer_name}': {exc}")
+            hf_tokenizer = None
+    if hf_tokenizer:
+        encoded = hf_tokenizer.encode(prompt, add_special_tokens=False)
+        if not encoded:
+            bos = getattr(hf_tokenizer, "bos_token_id", None)
+            encoded = [bos] if bos is not None else [0]
+        tokens = torch.tensor(encoded, dtype=torch.long).unsqueeze(0)
+
+        def decode_fn(ids: list[int]) -> str:
+            return hf_tokenizer.decode(ids, skip_special_tokens=True)
+
+    else:
+        tokenizer = ByteTokenizer(vocab_size=cfg.model.vocab_size)
+        encoded = tokenizer.encode(prompt)
+        if encoded.numel() == 0:
+            encoded = torch.zeros(1, dtype=torch.long)
+        tokens = encoded.unsqueeze(0)
+
+        def decode_fn(ids: list[int]) -> str:
+            return tokenizer.decode(ids)
+
+    tokens = tokens[:, -worker.cfg.max_seq_len :].to(device)
+    generated = tokens.clone()
+    start = perf_counter()
+    for _ in range(max_new_tokens):
+        window = generated[:, -worker.cfg.max_seq_len :]
+        logits = worker(window)
+        next_logits = logits[:, -1, :]
+        next_token = next_logits.argmax(dim=-1, keepdim=True)
+        generated = torch.cat([generated, next_token], dim=1)
+    duration = perf_counter() - start
+    output_tokens = [int(t) for t in generated[0].tolist()]
+    typer.echo(f"Output: {decode_fn(output_tokens)}")
+    stats = cache.info()
+    typer.echo(
+        f"Cache hits: {int(stats['hits'])}, misses: {int(stats['misses'])}, hit_rate: {stats['hit_rate']:.2f}"
+    )
     typer.echo(f"Latency: {duration*1000:.2f} ms for {max_new_tokens} tokens")
 
 

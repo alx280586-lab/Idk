@@ -73,6 +73,7 @@ def build_training_bundle(cfg: FNCConfig) -> TrainingBundle:
         n_heads=cfg.model.n_heads,
         vocab_size=cfg.model.vocab_size,
         max_seq_len=cfg.model.max_seq_len,
+        mlp_ratio=cfg.model.mlp_ratio,
     )
     worker = FNCWorker(worker_cfg, generator, cache, precision, seeds).to(device)
     dataset, tokenizer = _resolve_dataset(cfg)

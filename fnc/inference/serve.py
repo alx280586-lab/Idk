@@ -28,6 +28,7 @@ class FNCRequestHandler(BaseHTTPRequestHandler):
             n_heads=cfg.model.n_heads,
             vocab_size=cfg.model.vocab_size,
             max_seq_len=cfg.model.max_seq_len,
+            mlp_ratio=cfg.model.mlp_ratio,
         ),
         generator,
         cache,

@@ -25,6 +25,7 @@ class WorkerConfig:
     n_heads: int
     vocab_size: int
     max_seq_len: int
+    mlp_ratio: int = 4
 
 
 class FNCWorker(nn.Module):
@@ -51,6 +52,7 @@ class FNCWorker(nn.Module):
                 layer_id=i,
                 d_model=cfg.d_model,
                 n_heads=cfg.n_heads,
+                mlp_hidden=cfg.d_model * cfg.mlp_ratio,
                 generator=generator,
                 coord_encoder=self.coord_encoder,
                 cache=cache,
@@ -92,11 +94,23 @@ class FNCWorker(nn.Module):
 
 
 class ProceduralBlock(nn.Module):
-    def __init__(self, layer_id: int, d_model: int, n_heads: int, generator, coord_encoder, cache, precision, seeds: SeedRegistry) -> None:
+    def __init__(
+        self,
+        layer_id: int,
+        d_model: int,
+        n_heads: int,
+        mlp_hidden: int,
+        generator,
+        coord_encoder,
+        cache,
+        precision,
+        seeds: SeedRegistry,
+    ) -> None:
         super().__init__()
         self.layer_id = layer_id
         self.d_model = d_model
         self.n_heads = n_heads
+        self.mlp_hidden = mlp_hidden
         self.coord_encoder = coord_encoder
         self.generator = generator
         self.cache = cache
@@ -106,8 +120,8 @@ class ProceduralBlock(nn.Module):
         self.k_proxy = self._create_proxy("attn_k_proj", d_model, d_model)
         self.v_proxy = self._create_proxy("attn_v_proj", d_model, d_model)
         self.o_proxy = self._create_proxy("attn_out_proj", d_model, d_model)
-        self.ff1_proxy = self._create_proxy("mlp_fc1", d_model, d_model)
-        self.ff2_proxy = self._create_proxy("mlp_fc2", d_model, d_model)
+        self.ff1_proxy = self._create_proxy("mlp_fc1", d_model, mlp_hidden)
+        self.ff2_proxy = self._create_proxy("mlp_fc2", mlp_hidden, d_model)
 
     def _create_proxy(self, block_type: str, rows: int, cols: int) -> FNCParamProxy:
         spec = (block_type, self.layer_id, 0, rows, cols)

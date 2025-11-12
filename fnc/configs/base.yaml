@@ -4,6 +4,7 @@ model:
   n_heads: 16
   vocab_size: 50257
   max_seq_len: 2048
+  mlp_ratio: 4
 generator:
   latent_dim: 512
   spectral_bases: ["fourier", "wavelet"]

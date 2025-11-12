@@ -65,6 +65,7 @@ class ModelConfig:
     n_heads: int = 16
     vocab_size: int = 50257
     max_seq_len: int = 2048
+    mlp_ratio: int = 4
 
 
 @dataclass

@@ -140,7 +140,29 @@ policy, and seed registry captured during training. Override configuration
 fields with `--config` if you need to run on different hardware at inference
 time.
 
-### 6. Export checkpoints
+### 6. Host a pre-trained GPT-2 checkpoint
+
+FNC can also host an existing Hugging Face GPT-2 checkpoint without re-training
+the fractal generator. Install the optional dependency and export the static
+bundle:
+
+```bash
+pip install transformers
+python -m fnc.inference.hf_cli export gpt2 --output bundles/gpt2_static.pt
+```
+
+The resulting bundle contains the GPT-2 weights wrapped in procedural proxies.
+Generate text using the new `static` sub-command:
+
+```bash
+python -m fnc.inference.generate static bundles/gpt2_static.pt --prompt "Once upon a time" --max-new-tokens 32
+```
+
+If the tokenizer metadata is available in the bundle, the CLI will automatically
+reuse it. Otherwise it falls back to the byte-level tokenizer shipped with the
+repository.
+
+### 7. Export checkpoints
 
 To copy the trained generator checkpoint into a portable location:
 
@@ -194,7 +216,9 @@ pytest fnc/tests -q
    scheduler unlocks new levels of detail according to `training.lod_milestones`.
 5. **Inference** – The CLI loads the saved bundle, samples autoregressively using
    byte-level tokens, and reports cache statistics so you can reason about
-   streaming efficiency on the target hardware.
+   streaming efficiency on the target hardware. The new static bundle flow also
+   lets you mount existing GPT-2 checkpoints and drive them through the same
+   caching stack.
 
 ## Understanding the 10T-equivalent build
 
