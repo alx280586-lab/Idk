@@ -1,0 +1,37 @@
+model:
+  d_model: 256
+  n_layers: 4
+  n_heads: 8
+  vocab_size: 512
+  max_seq_len: 128
+  mlp_ratio: 4
+generator:
+  latent_dim: 256
+  spectral_bases: ["fourier"]
+  num_lod: 1
+  coord_embed_dim: 64
+  modulation_dim: 32
+  quant_policy:
+    default_bits: 8
+    allow_learned: false
+runtime:
+  cache_bytes_gpu: 268435456
+  cache_bytes_cpu: 1073741824
+  prefetch_window: 2
+  device_budget: "cpu_favored"
+training:
+  optimizer: "adamw"
+  lr: 5.0e-4
+  warmup_steps: 100
+  batch_tokens: 8192
+  grad_clip: 1.0
+  precision: "bf16"
+  ema_decay: 0.0
+  seed: 1337
+  aux_weight: 0.0
+  epochs: 2
+data:
+  dataset_path: "fnc/data/base_corpus.txt"
+  tokenizer: "byte"
+logging:
+  wandb: false

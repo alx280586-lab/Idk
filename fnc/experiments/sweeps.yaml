@@ -1,0 +1,10 @@
+# Example sweep configuration for hyperparameter exploration
+- name: progressive_lod
+  parameters:
+    training.lr: [1e-4, 5e-5]
+    generator.num_lod: [1, 2, 3]
+    runtime.prefetch_window: [2, 4]
+- name: quant_precision
+  parameters:
+    generator.quant_policy.default_bits: [4, 6, 8]
+    training.aux_weight: [0.0, 0.1]

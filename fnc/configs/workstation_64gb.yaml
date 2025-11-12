@@ -1,0 +1,8 @@
+runtime:
+  cache_bytes_gpu: 8000000000
+  cache_bytes_cpu: 24000000000
+  prefetch_window: 6
+  device_budget: "gpu_favored"
+training:
+  batch_tokens: 524288
+  precision: "bf16"
