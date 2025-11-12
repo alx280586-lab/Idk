@@ -12,3 +12,7 @@ profile.svg
 
 # Time trace
 trace.json
+
+# Python bytecode caches
+__pycache__/
+*.pyc

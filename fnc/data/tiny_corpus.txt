@@ -1,0 +1,2 @@
+Fractal Neural Compression explores procedural weight generation for transformers.
+This tiny corpus is only intended for smoke testing and sanity checks.
