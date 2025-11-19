@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant User
+  participant Projector
+  participant Field
+  participant KG
+  participant Chat
+  User->>Projector: text query
+  Projector->>Field: initial wave packet
+  Field->>KG: retrieval cues
+  KG->>Chat: contextual nodes
+  Chat-->>User: response
