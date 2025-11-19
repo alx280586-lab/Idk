@@ -1,0 +1,14 @@
+classDiagram
+  class Node {
+    +string node_id
+    +string title
+    +string primary_definition
+    +list polysemy_bundles
+    +dict emotional_vectors
+  }
+  class PolysemyVariant {
+    +int variant_id
+    +string context_signature
+    +string field_region
+  }
+  Node --> PolysemyVariant
